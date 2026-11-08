@@ -17,10 +17,13 @@ The goal: put a business online, onchain and in front of agents as well as peopl
 | # | Decision | Choice |
 |---|---|---|
 | 1 | Which project is submitted | **Only Thalace Shops.** The gtmx Thalace Store (`near-hackathon` branch, PRs #366–#372, built 2026-11-01 to 11-03) is ported in and disclosed. It is not submitted separately (Q-015). |
-| 2 | What shops sell | Digital goods and services, so delivery is a link or a Markdown deliverable |
+| 2 | What shops sell | Digital goods and services, so delivery is a link or a Markdown deliverable. Made-to-order physical work (a print job) is sold as a **service the team delivers**: the invoice is paid onchain, and fulfilment is marked done by the shop. |
 | 3 | How agents reach shops | MCP endpoint + public directory; Agent Market listing as a second channel |
-| 4 | Demo domain | `shops.thalace.com` |
+| 4 | Demo domain | `shops.thalace.com`, hosted on **Render**, database on a **new Supabase project** (connected 2026-11-08) |
 | 5 | Shop-to-shop trade | Yes: a shared directory, negotiation between agents, group bulk orders |
+| 6 | Demo business | **Shanga Prints** (https://prints.shangalabs.com), a real Nairobi digital-manufacturing business (§9) |
+| 7 | Platform fee | Thalace takes a fee on each sale, **set by the admin** (§6.2) |
+| 8 | Who opens a group order | The **seller turns group buying on** for an offer and sets its tiers; **any buyer** (a shop or an outside agent) can then open one (§7.3) |
 
 ---
 
@@ -91,8 +94,9 @@ Baseline vs in-window must be stated in the README (Q-002, Q-005). Port **only w
 | `founders` | `user_id` (Supabase), name, KRA PIN (optional) | One founder, many shops |
 | `shops` | slug, name, description, status (`draft`, `live`, `paused`, `frozen`), `agent_wallet_id`, `near_account` (optional) | Each shop: one agent, one wallet |
 | `shop_policies` | payees + split %, daily USD cap, settlement asset, allowed suppliers, signed version | Mirrors the signed policy; changing it needs a new owner signature |
-| `offers` | shop, title, kind (`digital`, `service`), list price, **floor price**, volume tiers, delivery (link / Markdown / manual) | The floor and tiers are what negotiation is bounded by |
-| `invoices` | number (`KOFI-0001`), seller shop, buyer (`human` email, `agent` id, or `shop`), line items, total, currency, status, `expires_at`, deposit address + asset, buyer KRA PIN (B2B), tx links | §6 |
+| `offers` | shop, title, kind (`digital`, `service`), list price (USD, with the KES price shown alongside), **floor price**, volume tiers, `group_buy_enabled`, max group window, delivery (link / Markdown / manual) | The floor and tiers are what negotiation is bounded by |
+| `platform_settings` | `fee_bps` (basis points), fee account, max fee, changed by / at | One row; every change written to `admin_audit_log` (who, before, after) |
+| `invoices` | number (`SHP-0001`), seller shop, `fee_bps` snapshot, fee amount, buyer (`human` email, `agent` id, or `shop`), line items, total, currency, status, `expires_at`, deposit address + asset, buyer KRA PIN (B2B), tx links | §6 |
 | `negotiations` | offer, buyer, rounds (max 3), each move + reason, outcome | §7.2 |
 | `group_orders` | offer, tier table, target qty, deadline, status | §7.3 |
 | `group_order_members` | group order, buyer shop, committed qty, invoice | |
@@ -125,7 +129,17 @@ stateDiagram-v2
 - **Agent buyers** get the same invoice as JSON from the MCP `place_order` tool. They pay the deposit address from whatever chain they hold, then poll `invoice_status`.
 - **Shop buyers** (procurement, group orders) pay from their own wallet with an Intents transfer. That only works if the seller's wallet is on the buyer's **allowed-suppliers** list in its signed policy (§7.4).
 - **B2B fields:** buyer and seller KRA PINs, checked through the KRA PIN API before a large B2B invoice is issued. This is **not** a KRA eTIMS tax invoice. eTIMS integration is out of scope, and the README must say so.
-- **Exports:** per-shop CSV (date, invoice number, buyer, items, amount, asset, status, tx link) and a public ledger page `shops.thalace.com/s/<slug>/ledger`.
+- **Exports:** per-shop CSV (date, invoice number, buyer, items, amount, fee, net, asset, status, tx link) and a public ledger page `shops.thalace.com/s/<slug>/ledger`.
+
+### 6.2 Platform fee
+
+- The fee is a payee like any other: **Thalace's fee account is added to every shop's signed policy** as an allowed destination when the shop goes live. The owner sees the fee and its maximum before signing.
+- The **percentage** is set by the admin in `platform_settings`, not in the signed policy. So the admin can change it without every owner signing again. The policy only allows the destination, and the backend computes the amount.
+- **Fee changes apply to new invoices only.** Each invoice keeps the `fee_bps` it was issued with, so a paid invoice's numbers never change afterwards.
+- A **maximum fee** (say 10%) is shown to owners at go-live. The admin can't set the fee above it; raising the maximum would need owners to agree again.
+- Every change goes through an audited admin endpoint (`/api/v1/admin/*`, `require_admin`), and shop owners see a notice in their Feed.
+- On the ledger the fee is its own line (`kind = fee`), so the invoice shows gross, fee and net.
+- *Open:* which NEAR account receives the fee. Probably `NEAR_MAINNET_WALLET_ADDRESS`, but confirm it isn't kept only for the prize payout.
 
 ---
 
@@ -155,9 +169,11 @@ seller → QUOTE | ACCEPT | WALK_AWAY
 
 ### 7.3 Group orders (the swarm)
 
-A seller's offer has volume tiers (for example 1–4 at $10, 5–9 at $8, 10+ at $6). Any shop can open a **group order** on it:
+A seller's offer has volume tiers (for example 1–4 at $10, 5–9 at $8, 10+ at $6).
 
-1. **Open:** offer, deadline, current tier. It's listed in the directory and pushed to subscribed shops.
+**Who can open one:** the **seller decides** whether an offer allows group buying, sets its tiers and the longest window it accepts (say 72 hours). A group order commits the seller to a tier price, so it needs the seller's consent. Once that's on, **any buyer** can open a group order: one of our shops' agents, or an outside agent through MCP. Outside agents joining is what turns this into a real market and not a closed demo. To stop spam, each offer has at most one open group order at a time, and the opener must commit at least one unit.
+
+1. **Open:** offer, deadline (within the seller's window), current tier. It's listed in the directory and pushed to subscribed shops.
 2. **Join:** a buyer shop's agent commits a quantity, staying within its daily cap and only if the seller is on its allowed-suppliers list.
 3. **Close at the deadline:** the price is the tier reached by the total committed quantity. Each member gets **its own invoice** for its share at that price. Nothing is charged before the close.
 4. **Pay window:** members pay their own invoices. If some don't pay in time, the price is recomputed on what was paid, rounded to the tier that quantity reaches. The seller's rules say whether it delivers at that tier or refunds.
@@ -185,7 +201,7 @@ The Agent API policy covers actions, assets, limits, **destinations**, a USD bud
 
 | Day | Date | Focus | Done when | Priority |
 |---|---|---|---|---|
-| 0 | Sun 11-08 | **Unblock.** Agent API key (`naa_…`), or the demo key at `api.demo.agentsonintents.com`. `STORE_GRANT_KEY`. Deploy the skeleton to `shops.thalace.com` with HTTPS and Supabase Postgres. Read the docs on the items in §10. | `https://shops.thalace.com/api/v1/health` answers; Agent API `tokens()` works with the key | P0 |
+| 0 | Sun 11-08 | **Unblock.** Supabase connected ✅, Render chosen ✅. Agent API approval pending, so **build against the demo key** (partners.demo.agentsonintents.com, base URL `api.demo.agentsonintents.com`) and switch to the `naa_…` key when it's approved. `STORE_GRANT_KEY`. Deploy the skeleton to `shops.thalace.com` with HTTPS and Supabase Postgres. Read the docs on the items in §10. | `https://shops.thalace.com/api/v1/health` answers; Agent API `tokens()` works with the key | P0 |
 | 1 | Mon 11-09 | **Foundations.** Supabase auth, Alembic, tables from §5. Port the Agent API client and its tests. Shop create / list API. NEAR AI Cloud as the first LLM provider. | A founder signs in, creates two shops, sees them listed; tests green | P0 |
 | 2 | Tue 11-10 | **Shop agent + console.** Port the ReAct loop and tool guard. Shop tools: draft catalog, set offer (owner confirms), sales status, read the ledger. Console: shops list, shop page, rules, passkey go-live (port). | Owner chats with the shop agent, it drafts offers, the owner signs the shop live on `shops.thalace.com` | P0 |
 | 3 | Wed 11-11 | **Invoices end to end.** Invoice model and public page, deposit quote, watcher, delivery, payouts with split, ledger page, CSV. **First real $1 loop on mainnet** (asks first). | A human pays $1 from another chain; the invoice reads paid → delivered → settled, with tx links | P0 |
@@ -204,12 +220,25 @@ The Agent API policy covers actions, assets, limits, **destinations**, a USD bud
 
 ## 9. Demo script (what the video shows) and tracks claimed
 
-1. A founder creates **"Kofi Studio"** (sells product-photo editing as a service) and **"Highlands Research"** (sells a market report). The agent drafts offers; the founder sets a floor, a $20/day cap and a 90/10 split, then signs with a passkey.
-2. **A person** buys the report: invoice link, pays $1 USDC from Base, invoice turns paid, the report is delivered, the split is paid out, the ledger shows each step.
-3. **Claude through MCP** finds Kofi Studio, asks for 5 edits below list price, gets a counter, accepts, and pays the invoice.
-4. **The swarm:** Highlands opens a group order on its report with tiers. Scripted shops and Kofi's agent join; the order closes at the 10+ tier; each member pays its own invoice.
-5. **The limit holds:** someone tells Kofi's agent to pay an unknown address. The wallet refuses, and the founder sees why.
-6. The founder's console shows both shops, money in and out, and each agent's reasoning trail.
+**The demo business: Shanga Prints** (https://prints.shangalabs.com), a Nairobi digital-manufacturing business: 3D printing, CAD design, laser cutting and engraving, photo-to-figurine. It sells today in KES through M-Pesa, with delivery across Nairobi. Its catalogue already splits naturally into several shops, which shows the "one founder, many shops" idea with a real business:
+
+| Shop | Sells | Delivery |
+|---|---|---|
+| **Shanga CAD Studio** | CAD design from a sketch or idea, print-readiness review, consultation | Digital: the file or a Markdown report |
+| **Shanga Creative Lab** | Photo to figurine: a downloadable 3D model, optionally printed | Digital model; the print as a team-delivered service |
+| **Shanga Prints** | Print jobs, engraved nameplates and keychains in batches | Service the team delivers (pickup or Nairobi delivery) |
+
+Thalace Shops gives Shanga what M-Pesa doesn't: buyers outside Kenya paying in stablecoins from any chain, and agents as customers.
+
+**Before recording, get Shanga's written OK** to use its name, products and photos in the demo and the X post. The README says the demo shops run on Shanga's real catalogue, with demo-sized prices.
+
+1. The founder creates the three shops from Shanga's site. Each agent drafts offers from the real catalogue; the founder sets floors, a $20/day cap and the payees (the fee line is visible), then signs each shop live with a passkey.
+2. **A person abroad** buys a CAD print-readiness review: invoice link, pays $1 USDC from Base, invoice turns paid, the report is delivered, payees and the fee are paid out, the ledger shows each step.
+3. **Claude through MCP** finds Shanga CAD Studio, asks for a bracket design below list price, gets a counter with a reason, accepts, and pays the invoice.
+4. **The swarm:** an outside agent opens a group order for 20 engraved event nameplates on Shanga Prints (tiers 1–4, 5–9, 10+). Scripted buyer agents join; it closes at the 10+ tier; each member pays its own invoice.
+5. **Shop to shop:** Shanga Prints' agent buys a print-ready file for a figurine from Shanga Creative Lab, an allowed supplier in its signed policy.
+6. **The limit holds:** someone tells Shanga Prints' agent to pay an unknown address. The wallet refuses, and the founder sees why.
+7. The founder's console shows all three shops, money in and out, and each agent's reasoning trail.
 
 | Track | Claimed if the demo shows | Step |
 |---|---|---|
@@ -246,9 +275,11 @@ Don't assume any of these. Read the docs and write the answer here.
 | Scope | Priorities and cut lines in §8; P0 is finished before P1 starts |
 | Judges can't reproduce mainnet flows | Simulation mode + `dry` quotes + hosted demo + video (Q-012) |
 
-## 12. Open questions for the founder
+## 12. Open questions
 
-1. **Demo shops:** are "Kofi Studio" and "Highlands Research" fine, or do you have real Kenyan businesses that would agree to be in the demo? Real ones make a better `realworld` story.
-2. **Hosting:** Render (like gtmx), or something else, for `shops.thalace.com`? Which Supabase project?
-3. **Platform fee:** does Thalace take a cut of each sale (a fixed ledger line and payee)? It makes the "business" story real, but it's optional.
-4. **Who can open a group order:** any shop, or only sellers on their own offers?
+Answered 2026-11-08: demo business (Shanga Prints), hosting (Render + new Supabase), platform fee (admin-set), group orders (seller enables, any buyer opens). See §2.
+
+Still open:
+1. **Shanga's consent:** written OK to use its name, catalogue and photos in the demo and the X post.
+2. **Fee account and starting fee:** which NEAR account receives the fee, the starting percentage, and the maximum shown to owners.
+3. **Agent API key:** the `naa_…` approval. The demo key covers building until then.
