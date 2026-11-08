@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     near_intents_agent_api_key: str = ""
     near_ai_cloud_api_key: str = ""
     near_mainnet_wallet_address: str = ""
+    # Receives the platform fee on every sale; listed in each shop's signed
+    # policy at go-live, so it must exist on NEAR first.
+    near_mainnet_platform_treasury_wallet_address: str = ""
+    near_intents_agent_api_url: str = "https://api.demo.agentsonintents.com"
+    near_ai_cloud_base_url: str = "https://cloud-api.near.ai/v1"
 
     # -- KRA (Kenya Revenue Authority) API credentials, one pair per product --
     kra_taxpayer_obligations_cons_key: str = ""

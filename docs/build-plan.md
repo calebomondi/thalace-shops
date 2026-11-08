@@ -139,7 +139,7 @@ stateDiagram-v2
 - A **maximum fee** (say 10%) is shown to owners at go-live. The admin can't set the fee above it; raising the maximum would need owners to agree again.
 - Every change goes through an audited admin endpoint (`/api/v1/admin/*`, `require_admin`), and shop owners see a notice in their Feed.
 - On the ledger the fee is its own line (`kind = fee`), so the invoice shows gross, fee and net.
-- *Open:* which NEAR account receives the fee. Probably `NEAR_MAINNET_WALLET_ADDRESS`, but confirm it isn't kept only for the prize payout.
+- The fee goes to the platform treasury, `NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`. That wallet is still to be created, and it must exist before any shop goes live (§10).
 
 ---
 
@@ -220,7 +220,7 @@ The Agent API policy covers actions, assets, limits, **destinations**, a USD bud
 
 ## 9. Demo script (what the video shows) and tracks claimed
 
-**The demo business: Shanga Prints** (https://prints.shangalabs.com), a Nairobi digital-manufacturing business: 3D printing, CAD design, laser cutting and engraving, photo-to-figurine. It sells today in KES through M-Pesa, with delivery across Nairobi. Its catalogue already splits naturally into several shops, which shows the "one founder, many shops" idea with a real business:
+**The demo business: Shanga Prints** (https://prints.shangalabs.com), a Nairobi digital-manufacturing business owned by the founder of Thalace: 3D printing, CAD design, laser cutting and engraving, photo-to-figurine. It sells today in KES through M-Pesa, with delivery across Nairobi. Its catalogue already splits naturally into several shops, which shows the "one founder, many shops" idea with a real business:
 
 | Shop | Sells | Delivery |
 |---|---|---|
@@ -230,7 +230,7 @@ The Agent API policy covers actions, assets, limits, **destinations**, a USD bud
 
 Thalace Shops gives Shanga what M-Pesa doesn't: buyers outside Kenya paying in stablecoins from any chain, and agents as customers.
 
-**Before recording, get Shanga's written OK** to use its name, products and photos in the demo and the X post. The README says the demo shops run on Shanga's real catalogue, with demo-sized prices.
+The README says that Shanga belongs to the same founder and that the demo shops run on its real catalogue, with demo-sized prices.
 
 1. The founder creates the three shops from Shanga's site. Each agent drafts offers from the real catalogue; the founder sets floors, a $20/day cap and the payees (the fee line is visible), then signs each shop live with a passkey.
 2. **A person abroad** buys a CAD print-readiness review: invoice link, pays $1 USDC from Base, invoice turns paid, the report is delivered, payees and the fee are paid out, the ledger shows each step.
@@ -251,17 +251,46 @@ Thalace Shops gives Shanga what M-Pesa doesn't: buyers outside Kenya paying in s
 
 ---
 
-## 10. Check in the docs before building (day 0)
+## 10. Checked in the docs (2026-11-08)
 
-Don't assume any of these. Read the docs and write the answer here.
+Sources: Agent API [How it works](https://docs.agentsonintents.com/integration/agent-api/concepts), [Funding](https://docs.agentsonintents.com/integration/agent-api/funding), [Executions](https://docs.agentsonintents.com/integration/agent-api/executions), [Policies & Limits](https://docs.agentsonintents.com/integration/agent-api/policies-and-limits); [Agent Market: list your agent](https://docs.market.near.ai/list-your-agent); NEAR AI Cloud `GET /v1/models` with our key.
 
-- [ ] Agent API: policy fields for destinations, USD budget and time windows; how a destination is added later (`policy_update`); quote and deposit-address lifetime; minimum amounts and fees per chain.
-- [ ] Agent API: whether an Intents transfer between two agent wallets is instant and fee-free (the basis of shop-to-shop payments).
-- [ ] Agent API key: production `naa_…` key vs the demo key (`api.demo.agentsonintents.com`, keys rotate after the demo period). Whether a wallet made with the demo key keeps working after it.
-- [ ] NEAR AI Cloud: OpenAI-compatible base URL and model ids for tool calling.
-- [ ] Sub-accounts: whether shops get `<slug>.thalace.near`, who pays storage, whether it's linked to the Agent API wallet. Otherwise skip (P3).
-- [ ] Agent Market: **buyers who hire through it must pay through it** (marketplace escrow, Markdown deliverables). It's a separate sales channel whose money lands in the marketplace balance, not the shop wallet. Decide whether that's worth a day-6 slot.
+### What the docs say
+
+| Question | Answer |
+|---|---|
+| Who owns what | One **owner** (passkey or NEAR account) can own **many agents**. Each agent has its own wallet, policy and USD budget. → The founder's passkey owns every one of their shops. |
+| Policy fields | `actions`, `assets`, per-asset `limits` (per tx / hourly / daily / monthly), `max_actions_per_hour`, `destinations` (`only` / `except` / `any`; required at create), `budget` (daily / weekly / monthly USD, across all assets), `timelock_ms`, `schedule`, `owner_approval`, `confidential`, `frozen`. |
+| Changing the policy | One owner signature over the **complete** policy (`policy_update`). Changes to only `destinations`, `budget`, `timelock_ms` or `schedule` **apply at once, with no transaction**. Policy changes have a **5–10 minute cooldown** (a freeze skips it). |
+| Shop-to-shop payments | `transfer` sends to another NEAR Intents account. `recipient` = the other agent's `agent.wallet.near_account_id`, which must be listed in the payer's `destinations` (`{action: "transfer", address}`). Agent actions run inside NEAR Intents, which needs **no gas**. |
+| Deposit addresses (invoices) | `POST /v1/agents/{id}/deposit` needs only the partner key: no grant, no signature. With an exact `amount`, the quote lasts **about a day**; without one, 3 days. `details.expires_at` is authoritative. `min_amount` is per route. **100 addresses per agent per rolling 24 hours.** |
+| Refunds | A wrong amount, late payment or failed conversion is **refunded into the shop's own wallet, never to the buyer**. There's no refund address to choose. |
+| Concurrency | **Only one money action runs per agent wallet at a time**; an overlapping one gets `wallet_busy`. |
+| Grants | Up to 50 per agent, each expiring within 365 days. Owner-only powers (policy, grants, freeze, delete) can't be delegated. |
+| Gas | The Agent API pays gas and storage for owner requests. Nobody needs NEAR for gas. |
+| Recovery | **A lost owner wallet or passkey can't be recovered.** Nobody can change the rules or delete the agent after that. |
+| Status | Experimental, mainnet-only beta: "you may lose all assets". |
+| NEAR AI Cloud | `https://cloud-api.near.ai/v1`, OpenAI-compatible, our key works. Its models include Qwen (`qwen/qwen3.7-max`, `Qwen/Qwen3.8-27B`), DeepSeek, GLM, Kimi, and proxied OpenAI / Anthropic / Google models. |
+| Agent Market | Agents poll for jobs and submit **Markdown** deliverables. **Buyers who hire through it must pay through it**; earnings land in the marketplace balance, not the shop wallet. There's also an MCP endpoint (`https://market.near.ai/mcp`). |
+
+### What this changes in the design
+
+1. **Invoices:** create the deposit address **only when the buyer picks a coin**, never when an invoice is drafted (100 a day per shop). An invoice's due date is the quote's `expires_at`, about a day.
+2. **Wrong payments:** a short or late payment lands in the shop's wallet, not back with the buyer. The invoice reads **"payment received, doesn't match"**, and the owner decides: accept it as part-payment, or refund by hand. The agent can't refund on its own, because the buyer's address isn't an allowed destination. Say this on the invoice page.
+3. **Payouts and procurement share the budget:** payee shares and the platform fee are transfers, so they count against the daily USD budget like purchases do. The go-live screen sizes the budget with that in mind: expected daily payouts plus the procurement allowance.
+4. **One action at a time per shop:** payouts, fees and purchases go through **one queue per shop wallet**, run in order. This matters most at a group-order close, when many invoices settle at once.
+5. **Adding a supplier:** an owner signature, applied at once (destination-only change), but there's a 5–10 minute cooldown between policy changes. The console groups supplier additions into one signature.
+6. **The fee account must exist before shops go live.** A named recipient must exist on NEAR or the transfer is refused. Create the treasury wallet (`NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`) before day 3.
+7. **Passkey loss is permanent.** The go-live screen says so plainly. Demo shops use a passkey on a device you keep.
+8. **Privacy claim:** only claim `privacy` if the agents run on NEAR AI Cloud models that are TEE-attested. The proxied OpenAI / Anthropic / Google models probably aren't. Check which ones are before claiming it.
+
+### Still unknown
+
+- [ ] Whether agents and wallets made against the **demo** deployment (`api.demo.agentsonintents.com`) carry over to production, and whether the demo deployment stays up through judging (2026-11-18). Assume not: build on the demo key, but **create the final demo shops on the production key**.
+- [ ] Which NEAR AI Cloud models are TEE-attested, and which support tool calling.
+- [ ] Per-route minimum amounts for the coins we accept (read `min_amount` from a dry deposit once there's a key).
 - [ ] PingPay x402: whether its NEAR recipient can be a shop's Agent API wallet (P3).
+- [ ] Named sub-accounts per shop (`<slug>.thalace.near`): P3. A shop's onchain identity is its wallet's `near_account_id` until then.
 
 ## 11. Risks
 
@@ -279,7 +308,9 @@ Don't assume any of these. Read the docs and write the answer here.
 
 Answered 2026-11-08: demo business (Shanga Prints), hosting (Render + new Supabase), platform fee (admin-set), group orders (seller enables, any buyer opens). See §2.
 
+Also answered: Shanga belongs to the founder; the fee goes to `NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`.
+
 Still open:
-1. **Shanga's consent:** written OK to use its name, catalogue and photos in the demo and the X post.
-2. **Fee account and starting fee:** which NEAR account receives the fee, the starting percentage, and the maximum shown to owners.
-3. **Agent API key:** the `naa_…` approval. The demo key covers building until then.
+1. **Treasury wallet:** create it before day 3. Shops can't go live with a fee destination that doesn't exist.
+2. **Starting fee and maximum:** for example 2% now, 10% maximum shown to owners.
+3. **Agent API key:** the `naa_…` approval. The demo key covers building until then; the final demo shops are made on the production key.
