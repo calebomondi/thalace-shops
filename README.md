@@ -16,14 +16,14 @@
 
 ## Run it locally
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh/).
+Prerequisites: [uv](https://docs.astral.sh/uv/), [bun](https://bun.sh/) and Docker (local Postgres on port 5433).
 
 ```sh
 # Backend: http://localhost:8000
 cd backend
 cp .env.example .env        # then fill in the keys
 uv sync
-./scripts/dev.sh
+./scripts/dev.sh            # starts Docker Postgres, then the API
 curl localhost:8000/api/v1/health   # -> {"status":"ok",...}
 
 # Frontend: http://localhost:5173

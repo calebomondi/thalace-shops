@@ -1,0 +1,23 @@
+name: thalace-shops
+
+# Local Postgres for development. Production uses Supabase (render.yaml).
+# Port 5433 on the host, so it runs beside other projects' Postgres on 5432.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: thalace
+      POSTGRES_PASSWORD: thalace
+      POSTGRES_DB: thalace
+    ports:
+      - "5433:5432"
+    volumes:
+      - thalace-shops-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thalace -d thalace"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  thalace-shops-pg:

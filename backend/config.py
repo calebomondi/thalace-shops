@@ -45,13 +45,12 @@ class Settings(BaseSettings):
     supabase_secret_key: str = ""
 
     # -- Database --
-    # Postgres everywhere. DATABASE_URL wins; otherwise SUPABASE_DB_CONN_STR
-    # (point it at Supabase's transaction pooler, port 6543); otherwise a
-    # local Postgres.
-    database_url: str = Field(
-        "postgresql://thalace:thalace@localhost:5432/thalace",
-        validation_alias=AliasChoices("DATABASE_URL", "SUPABASE_DB_CONN_STR"),
-    )
+    # Postgres everywhere. Local dev: the docker-compose.yml service on 5433
+    # (DATABASE_URL in .env). Production: Supabase's transaction pooler
+    # (port 6543), set as DATABASE_URL on Render. Only DATABASE_URL is read,
+    # never SUPABASE_DB_CONN_STR, so local dev can't reach production by
+    # falling back to it.
+    database_url: str = "postgresql://thalace:thalace@localhost:5433/thalace"
     db_pool_size: int = 5
     db_max_overflow: int = 10
 

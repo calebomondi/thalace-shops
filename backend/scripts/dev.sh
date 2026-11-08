@@ -12,6 +12,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+docker compose up -d --wait postgres
+
 exec uv run uvicorn app.main:app \
   --reload \
   --host 0.0.0.0 \

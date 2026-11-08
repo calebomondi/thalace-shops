@@ -24,6 +24,8 @@ The goal: put a business online, onchain and in front of agents as well as peopl
 | 6 | Demo business | **Shanga Prints** (https://prints.shangalabs.com), a real Nairobi digital-manufacturing business (§9) |
 | 7 | Platform fee | Thalace takes a fee on each sale, **set by the admin** (§6.2) |
 | 8 | Who opens a group order | The **seller turns group buying on** for an offer and sets its tiers; **any buyer** (a shop or an outside agent) can then open one (§7.3) |
+| 9 | Sign-in | Supabase Auth with **email magic link and Google** |
+| 10 | Local database | **Docker Postgres** on port 5433 (`backend/docker-compose.yml`); Supabase is production only |
 
 ---
 
