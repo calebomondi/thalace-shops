@@ -1,0 +1,17 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Thalace Shops backend: FastAPI API and LangGraph agents"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.1",
+    "fastapi[standard]>=0.162.2",
+    "langchain-core>=1.7.6",
+    "langchain-openai>=1.7.4",
+    "langchain-qwq>=0.4.0",
+    "langgraph>=1.2.20",
+    "psycopg[binary]>=3.3.8",
+    "pydantic-settings>=2.16.2",
+    "sqlalchemy[asyncio]>=2.1.8",
+]

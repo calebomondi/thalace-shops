@@ -1,0 +1,17 @@
+# Secrets: keys live in env files that are never committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# Hackathon submission payload (contains personal data)
+submission*.json
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sw?
