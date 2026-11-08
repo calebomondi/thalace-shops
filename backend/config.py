@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     # Receives the platform fee on every sale; listed in each shop's signed
     # policy at go-live, so it must exist on NEAR first.
     near_mainnet_platform_treasury_wallet_address: str = ""
+    # Seed values for platform_settings; the admin changes the fee from the
+    # dashboard afterwards, never above the maximum owners agreed to.
+    platform_fee_bps: int = 200
+    platform_fee_max_bps: int = 1000
     near_intents_agent_api_url: str = "https://api.demo.agentsonintents.com"
     near_ai_cloud_base_url: str = "https://cloud-api.near.ai/v1"
 

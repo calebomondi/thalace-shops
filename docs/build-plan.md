@@ -139,7 +139,8 @@ stateDiagram-v2
 - A **maximum fee** (say 10%) is shown to owners at go-live. The admin can't set the fee above it; raising the maximum would need owners to agree again.
 - Every change goes through an audited admin endpoint (`/api/v1/admin/*`, `require_admin`), and shop owners see a notice in their Feed.
 - On the ledger the fee is its own line (`kind = fee`), so the invoice shows gross, fee and net.
-- The fee goes to the platform treasury, `NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`. That wallet is still to be created, and it must exist before any shop goes live (§10).
+- **Starting fee: 2%** (`platform_fee_bps = 200`). **Maximum: 10%** (`platform_fee_max_bps = 1000`), unless the founder decides otherwise. Both seed `platform_settings`, and the admin changes the fee after that.
+- The fee goes to the platform treasury, **`thalaceshops.near`** (`NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`). Checked 2026-11-08: the account exists on mainnet. Fees arrive as NEAR Intents balances on that account.
 
 ---
 
@@ -280,7 +281,7 @@ Sources: Agent API [How it works](https://docs.agentsonintents.com/integration/a
 3. **Payouts and procurement share the budget:** payee shares and the platform fee are transfers, so they count against the daily USD budget like purchases do. The go-live screen sizes the budget with that in mind: expected daily payouts plus the procurement allowance.
 4. **One action at a time per shop:** payouts, fees and purchases go through **one queue per shop wallet**, run in order. This matters most at a group-order close, when many invoices settle at once.
 5. **Adding a supplier:** an owner signature, applied at once (destination-only change), but there's a 5–10 minute cooldown between policy changes. The console groups supplier additions into one signature.
-6. **The fee account must exist before shops go live.** A named recipient must exist on NEAR or the transfer is refused. Create the treasury wallet (`NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`) before day 3.
+6. **The fee account must exist before shops go live.** A named recipient must exist on NEAR or the transfer is refused. Done: `thalaceshops.near` exists.
 7. **Passkey loss is permanent.** The go-live screen says so plainly. Demo shops use a passkey on a device you keep.
 8. **Privacy claim:** only claim `privacy` if the agents run on NEAR AI Cloud models that are TEE-attested. The proxied OpenAI / Anthropic / Google models probably aren't. Check which ones are before claiming it.
 
@@ -310,7 +311,8 @@ Answered 2026-11-08: demo business (Shanga Prints), hosting (Render + new Supaba
 
 Also answered: Shanga belongs to the founder; the fee goes to `NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`.
 
+Also answered: treasury `thalaceshops.near` (exists on mainnet), starting fee 2%, demo Agent API key working (2026-11-08). No testnet wallets: Intents is mainnet only.
+
 Still open:
-1. **Treasury wallet:** create it before day 3. Shops can't go live with a fee destination that doesn't exist.
-2. **Starting fee and maximum:** for example 2% now, 10% maximum shown to owners.
-3. **Agent API key:** the `naa_…` approval. The demo key covers building until then; the final demo shops are made on the production key.
+1. **Maximum fee:** 10% assumed. Confirm or change it before the go-live screen is built (day 2).
+2. **Agent API key:** the `naa_…` approval. The demo key covers building until then; the final demo shops are made on the production key.
