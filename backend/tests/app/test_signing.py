@@ -12,7 +12,7 @@ from cryptography.fernet import Fernet
 
 from app.services import signing
 from config import settings
-from data_sources.near.agent_api import AgentApiError, GeneratedIntent, Operation
+from data_sources.near.agent_api import AgentApiError, GeneratedIntent, Operation, Token
 from tests.conftest import make_user
 
 SITE = "https://shops.thalace.test"
@@ -48,6 +48,10 @@ class FakeAgentApi:
                              details={"revision": 1})
         return Operation(correlation_id, "grant_issue", "SUCCESS",
                          details={"grant": {"grant_id": f"g-{correlation_id}", "expires_at": "2027-05-01T00:00:00Z"}})
+
+    async def tokens(self):
+        return [Token(asset_id=settings.default_settlement_asset, symbol="USDC", decimals=6, blockchain="near",
+                      price_usd=1.0)]
 
     async def agent(self, agent_id):
         return {"id": agent_id, "wallet": {"near_account_id": "f00d" * 16},
@@ -133,6 +137,9 @@ def test_the_policy_holds_the_owners_rules_and_the_fee_account(client, agent_api
         {"action": "transfer", "address": "kaleb.near", "confidential": False},
         {"action": "withdraw", "chain": "base", "address": "0xabc1", "memo": None}]}
     assert policy["budget"]["daily_usd"] == "50.00"
+    # The Agent API requires per-asset limits; the cap again, in USDC's atomic units.
+    usdc = settings.default_settlement_asset
+    assert policy["limits"] == {"per_transaction": {usdc: "50000000"}, "daily": {usdc: "50000000"}}
     assert policy["assets"] == [settings.default_settlement_asset]
     assert set(policy["actions"]) == {"transfer", "withdraw"}
 

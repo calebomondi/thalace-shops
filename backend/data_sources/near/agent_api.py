@@ -160,7 +160,7 @@ class AgentApi:
             raise AgentApiError("unreachable", str(exc)) from exc
         if response.status_code >= 400:
             error = _error(response)
-            logger.warning("Agent API %s %s refused: %s (%s)", method, path, error.code, error.status)
+            logger.warning("Agent API %s %s refused: %s (%s) %s", method, path, error.code, error.status, error.detail)
             raise error
         try:
             return response.json()

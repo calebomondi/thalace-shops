@@ -66,7 +66,9 @@ def _refusal(exc: AgentApiError) -> ConflictError:
         return ConflictError(NOT_CONFIGURED)
     if exc.code == "unreachable":
         return ConflictError("NEAR Intents didn't answer. Try again in a minute.")
-    return ConflictError(f"NEAR Intents refused this ({exc.code}).")
+    # A request-layer refusal means our request was wrong; its detail says how.
+    detail = f": {exc.detail}" if exc.layer == "request" and exc.detail else ""
+    return ConflictError(f"NEAR Intents refused this ({exc.code}){detail}.")
 
 
 # -- The owner's passkey ------------------------------------------------------
@@ -114,18 +116,25 @@ def destination(payee: Payee) -> dict[str, Any]:
     return {"action": "withdraw", "chain": payee.chain, "address": payee.address, "memo": payee.memo}
 
 
-def build_policy(shop: Shop, payees: list[Payee], fee_account: str) -> dict[str, Any]:
+def build_policy(shop: Shop, payees: list[Payee], fee_account: str, decimals: int) -> dict[str, Any]:
     """The rules the owner signs. Money leaves only to the payees and the fee
     account, only in the shop's settlement asset, never past the daily cap.
-    The agent and our backend act inside it and can't change it."""
+    The agent and our backend act inside it and can't change it.
+
+    The cap is set twice: as the USD budget (checked by the Agent API) and as
+    per-asset limits in atomic units (checked by the wallet itself). The API
+    requires `limits`; a dollar stablecoin's units make them equal."""
     destinations = [{"action": "transfer", "address": fee_account, "confidential": False}]
     destinations += [destination(p) for p in payees if not (p.route == "transfer" and p.address == fee_account)]
+    cap_atomic = str(int(shop.daily_budget_usd * 10**decimals))
     return {
         "frozen": False,
         "actions": ["transfer", "withdraw"],
         "confidential": False,
         "owner_approval": False,
         "assets": [shop.settlement_asset],
+        "limits": {"per_transaction": {shop.settlement_asset: cap_atomic},
+                   "daily": {shop.settlement_asset: cap_atomic}},
         "max_actions_per_hour": MAX_ACTIONS_PER_HOUR,
         "destinations": {"mode": "only", "list": destinations},
         "budget": {"daily_usd": f"{shop.daily_budget_usd:.2f}", "weekly_usd": None, "monthly_usd": None},
@@ -154,6 +163,18 @@ def next_signature(shop: Shop) -> ShopIntentType | None:
     return None
 
 
+async def _decimals(asset_id: str) -> int:
+    """The settlement asset's decimals, as NEAR Intents lists it now."""
+    try:
+        tokens = await agent_api().tokens()
+    except AgentApiError as exc:
+        raise _refusal(exc) from exc
+    for token in tokens:
+        if token.asset_id == asset_id:
+            return token.decimals
+    raise ConflictError("NEAR Intents doesn't list this shop's settlement asset.")
+
+
 async def _owner_passkey(db: AsyncSession, shop: Shop, user_id: uuid.UUID) -> OwnerPasskey:
     if shop.owner_passkey_id is not None:
         passkey = await db.get(OwnerPasskey, shop.owner_passkey_id)
@@ -174,8 +195,9 @@ async def request_signature(db: AsyncSession, shop: Shop, user_id: uuid.UUID) ->
     if kind == "agent_create":
         payees = list((await db.scalars(select(Payee).where(Payee.shop_id == shop.id))).all())
         platform = await platform_service.get_platform(db)
+        decimals = await _decimals(shop.settlement_asset)
         fields = {"name": shop.name, "external_user_id": str(shop.id),
-                  "policy": build_policy(shop, payees, platform.fee_account),
+                  "policy": build_policy(shop, payees, platform.fee_account, decimals),
                   "owner": {"type": "passkey", "credential_id": passkey.credential_id,
                             "public_key": passkey.public_key, "rp_id": passkey.rp_id, "origin": passkey.origin}}
         shop.owner_passkey_id = passkey.id
