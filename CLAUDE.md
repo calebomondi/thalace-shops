@@ -32,7 +32,7 @@ bun run build                   # must pass before pushing
 bun run lint
 ```
 
-Deploy: Railway, `backend/railway.json` and `frontend/railway.json`; steps in `docs/deploy-railway.md`.
+Deploy: Railway; build and deploy settings in `.railway/railway.ts` (`railway config plan`, then `apply` only with the owner's OK); steps in `docs/deploy-railway.md`.
 
 ---
 

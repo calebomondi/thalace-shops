@@ -1,26 +1,35 @@
 # Deploying Thalace Shops on Railway
 
-Two services from this repo, with Supabase for auth and the database:
+Two services from this repo, with Supabase for auth and the database. Their build and deploy settings are infrastructure as code in **`.railway/railway.ts`** (Railway's `railway.json` config-as-code is deprecated):
 
-| Railway service | Root directory | Config file | What |
-|---|---|---|---|
-| `api` | `/backend` | `/backend/railway.json` | FastAPI + the shop agents + the payment watcher (`backend/Dockerfile`) |
-| `app` | `/frontend` | `/frontend/railway.json` | The web app at **https://shops.thalace.com**, served by Caddy, which forwards `/api/*` to `api` over Railway's private network (`frontend/Dockerfile`, `frontend/Caddyfile`) |
+| Railway service | Root directory | What |
+|---|---|---|
+| `api` | `/backend` | FastAPI + the shop agents + the payment watcher (`backend/Dockerfile`) |
+| `app` | `/frontend` | The web app at **https://shops.thalace.com**, served by Caddy, which forwards `/api/*` and `/mcp` to `api` over Railway's private network (`frontend/Dockerfile`, `frontend/Caddyfile`) |
 
 The browser only ever talks to `app`, so there's one origin and no CORS. `api` needs no public domain.
 
-**Run `api` as exactly one replica, always on.** The payment watcher and payout queue run inside its process: two copies would race each other, and a sleeping one would miss payments. `railway.json` sets one replica and restarts it on failure; don't turn on serverless (app sleeping) for `api`.
+**Run `api` as exactly one replica, always on.** The payment watcher and payout queue run inside its process: two copies would race each other, and a sleeping one would miss payments. Railway's default is one replica, and `.railway/railway.ts` restarts it on failure; don't turn on serverless (app sleeping) for `api`.
 
-Migrations run before each `api` deploy (`preDeployCommand: alembic upgrade head`); a failed migration stops the deploy.
+Migrations run before each `api` deploy (the pre-deploy command `alembic upgrade head` in `.railway/railway.ts`); a failed migration stops the deploy.
 
 ## 1. Create the project
 
 1. Railway → **New project → Deploy from GitHub repo** → `calebomondi/thalace-shops`.
 2. Make two services from the same repo. For each, in **Settings**:
    - **Source → Root directory**: `/backend` for `api`, `/frontend` for `app`.
-   - **Config-as-code → Railway config file**: `/backend/railway.json` or `/frontend/railway.json`.
    - **Source → Branch**: `main`. Work happens on `dev` and reaches `main` through a PR, so every deploy is reviewed.
-3. Rename them `api` and `app` (the variables below refer to `api` by name).
+3. Rename them `api` and `app` (the variables below and `.railway/railway.ts` refer to them by name).
+4. Apply the build and deploy settings from the repo root (needs the [Railway CLI](https://docs.railway.com/cli) and Node):
+
+   ```sh
+   railway link --project <project> --environment production
+   (cd .railway && npm install)
+   railway config plan      # review: builders, pre-deploy, health checks, restart policy
+   railway config apply
+   ```
+
+   Variables in `.railway/railway.ts` are listed by name with `preserve()`: their values stay in Railway. A variable added in Railway later must be added there too (as `preserve()`), or the next plan refuses to run.
 
 ## 2. Variables
 

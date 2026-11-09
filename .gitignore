@@ -15,3 +15,6 @@ submission*.json
 .vscode/*
 !.vscode/extensions.json
 *.sw?
+
+# Dependencies (the Railway IaC SDK in .railway/)
+node_modules/
