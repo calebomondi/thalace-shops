@@ -11,6 +11,11 @@ const actionText: Record<string, string> = {
   read_website: 'Read a web page',
   draft_offer: 'Drafted an offer',
   update_draft_offer: 'Rewrote a draft',
+  sales_summary: 'Checked sales',
+  find_suppliers: 'Looked for suppliers',
+  buy_from_supplier: 'Bought from a supplier',
+  list_group_orders: 'Looked at group orders',
+  join_group_order: 'Joined a group order',
 }
 
 function Actions({ actions }: { actions: string[] }) {

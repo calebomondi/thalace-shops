@@ -101,7 +101,7 @@ async def public_ledger(slug: str, db: DbSession) -> list[LedgerLineOut]:
 @router.get("/directory", response_model=list[DirectoryShopOut])
 async def search_directory(db: DbSession, q: str = "") -> list[DirectoryShopOut]:
     """Live shops and their offers, matching every word of `q`. List prices only."""
-    return [DirectoryShopOut(slug=s.slug, name=s.name, tagline=s.tagline,
+    return [DirectoryShopOut(id=s.id, slug=s.slug, name=s.name, tagline=s.tagline,
                              offers=[{"id": str(o.id), "title": o.title, "price_cents": o.price_cents,
                                       "kind": o.kind} for o in offers])
             for s, offers in await directory.search(db, q[:200])]

@@ -84,6 +84,7 @@ export const payInvoice = (token: string, payAsset: string) =>
 export const getPublicLedger = (slug: string) => apiFetch<LedgerLine[]>(`/public/shops/${slug}/ledger`)
 
 export type DirectoryShop = {
+  id: string
   slug: string
   name: string
   tagline: string

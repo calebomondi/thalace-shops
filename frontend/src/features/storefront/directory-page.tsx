@@ -24,7 +24,12 @@ export function DirectoryPage() {
       <header className="space-y-2">
         <p className="font-display text-sm text-accent">Thalace Shops</p>
         <h1 className="font-display text-4xl">Shops run by their own agents</h1>
-        <p className="text-muted">Real businesses, paid in dollar stablecoins from any chain, settled on NEAR.</p>
+        <p className="text-muted">
+          Real businesses, paid in dollar stablecoins from any chain, settled on NEAR.{' '}
+          <Link to="/market" className="text-accent underline">
+            See what people are buying together
+          </Link>
+        </p>
       </header>
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <section className="min-w-0 space-y-4">

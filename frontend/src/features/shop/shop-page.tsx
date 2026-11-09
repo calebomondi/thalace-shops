@@ -6,10 +6,12 @@ import { getShop, type Shop } from '../../lib/api/shops'
 import { useLoad } from '../../lib/use-load'
 import { AgentChat } from './agent-chat'
 import { GoLivePanel } from './go-live-panel'
+import { GroupOrdersPanel } from './group-orders-panel'
 import { NegotiationsPanel } from './negotiations-panel'
 import { OffersPanel } from './offers-panel'
 import { RulesPanel } from './rules-panel'
 import { SalesPanel } from './sales-panel'
+import { WalletPanel } from './wallet-panel'
 
 function ShopView({ shop, onShopChange }: { shop: Shop; onShopChange: (s: Shop) => void }) {
   // Bumped after each agent turn: the offers panel reloads what the agent drafted.
@@ -33,10 +35,12 @@ function ShopView({ shop, onShopChange }: { shop: Shop; onShopChange: (s: Shop) 
       <div className="grid gap-6 lg:grid-cols-[1fr_26rem]">
         <div className="min-w-0 space-y-6">
           <SalesPanel shop={shop} />
+          {shop.status !== 'draft' && <GroupOrdersPanel shopId={shop.id} />}
           {shop.status !== 'draft' && <NegotiationsPanel shopId={shop.id} />}
           <OffersPanel key={offersVersion} shopId={shop.id} />
           <RulesPanel shop={shop} onShopChange={onShopChange} />
           <GoLivePanel shop={shop} onShop={onShopChange} />
+          <WalletPanel shop={shop} onShop={onShopChange} />
         </div>
         <div className="lg:sticky lg:top-6 lg:self-start">
           <AgentChat shopId={shop.id} onTurn={() => setOffersVersion((v) => v + 1)} />

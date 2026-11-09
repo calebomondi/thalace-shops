@@ -30,6 +30,7 @@ class NegotiationOut(BaseModel):
 
 
 class DirectoryShopOut(BaseModel):
+    id: uuid.UUID
     slug: str
     name: str
     tagline: str

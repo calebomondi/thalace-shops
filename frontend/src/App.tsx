@@ -7,6 +7,8 @@ import { ShopPage } from './features/shop/shop-page'
 import { ShopsPage } from './features/shops/shops-page'
 import { DirectoryPage } from './features/storefront/directory-page'
 import { InvoicePage } from './features/storefront/invoice-page'
+import { MarketPage } from './features/storefront/market-page'
+import { MembershipPage } from './features/storefront/membership-page'
 import { PublicLedgerPage } from './features/storefront/public-ledger-page'
 import { ShopFrontPage } from './features/storefront/shop-front-page'
 import { useAuth } from './lib/auth-context'
@@ -42,6 +44,8 @@ function App() {
       <Route path="/auth" element={<Navigate to="/auth/sign-in" replace />} />
       {/* Public: anyone can buy, pay and check the ledger without an account. */}
       <Route path="/directory" element={<DirectoryPage />} />
+      <Route path="/market" element={<MarketPage />} />
+      <Route path="/m/:token" element={<MembershipPage />} />
       <Route path="/s/:slug" element={<ShopFrontPage />} />
       <Route path="/s/:slug/ledger" element={<PublicLedgerPage />} />
       <Route path="/i/:token" element={<InvoicePage />} />

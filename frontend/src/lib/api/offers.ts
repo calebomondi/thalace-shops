@@ -17,6 +17,7 @@ export type Offer = {
   delivery_note: string
   status: OfferStatus
   drafted_by_agent: boolean
+  group_buy_enabled: boolean
   created_at: string
 }
 

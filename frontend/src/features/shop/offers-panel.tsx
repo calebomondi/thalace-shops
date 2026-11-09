@@ -4,6 +4,7 @@ import { Button, ErrorNote, Field, Input, TextArea } from '../../components/ui'
 import { createOffer, listOffers, updateOffer, type Offer, type OfferKind, type OfferStatus } from '../../lib/api/offers'
 import { formatUsd, parseUsdToCents } from '../../lib/money'
 import { useLoad } from '../../lib/use-load'
+import { GroupBuyingEditor } from './group-buying-editor'
 
 const statusStyle: Record<OfferStatus, string> = {
   draft: 'border-line bg-paper text-muted',
@@ -53,6 +54,7 @@ function PriceEditor({ offer, onSave }: { offer: Offer; onSave: (price: number, 
 
 function OfferRow({ shopId, offer, onChange }: { shopId: string; offer: Offer; onChange: (o: Offer) => void }) {
   const [editing, setEditing] = useState(false)
+  const [grouping, setGrouping] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -100,12 +102,25 @@ function OfferRow({ shopId, offer, onChange }: { shopId: string; offer: Offer; o
             <Button variant="quiet" onClick={() => setEditing((v) => !v)}>
               {editing ? 'Close' : 'Edit prices'}
             </Button>
+            <Button variant="quiet" onClick={() => setGrouping((v) => !v)}>
+              {grouping ? 'Close' : offer.group_buy_enabled ? 'Group buying: on' : 'Group buying'}
+            </Button>
             <Button variant="quiet" disabled={busy} onClick={() => setStatus('archived')}>
               Archive
             </Button>
           </>
         )}
       </div>
+      {grouping && (
+        <GroupBuyingEditor
+          shopId={shopId}
+          offer={offer}
+          onSaved={(enabled) => {
+            onChange({ ...offer, group_buy_enabled: enabled })
+            setGrouping(false)
+          }}
+        />
+      )}
       {editing && (
         <PriceEditor
           offer={offer}
