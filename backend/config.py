@@ -17,6 +17,8 @@ from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _ROOT = Path(__file__).resolve().parent
+# Qwen (DashScope) models tried in order when NEAR AI Cloud can't answer.
+_QWEN_MODELS = ("qwen-plus-2025-04-28", "qwen-plus-2025-07-14", "qwen-plus-latest", "qwen-max")
 
 
 class Settings(BaseSettings):
@@ -29,6 +31,8 @@ class Settings(BaseSettings):
     # -- App --
     project_name: str = "Thalace Shops"
     api_v1_str: str = "/api/v1"
+    # The port serve.py listens on; Railway sets PORT.
+    port: int = 8000
     environment: str = "development"
     log_level: str = "INFO"
     # "text" for a terminal, "json" (one object per line) for a log shipper.
@@ -37,7 +41,7 @@ class Settings(BaseSettings):
     # ALLOWED_ORIGINS=http://localhost:5173,https://app.example.com
     allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     admin_bootstrap_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
-    frontend_base_url: str = "http://localhost:5173"
+    frontend_base_url: str = "http://localhost:5180"
 
     # -- Supabase --
     supabase_base_url: str = ""
@@ -45,13 +49,12 @@ class Settings(BaseSettings):
     supabase_secret_key: str = ""
 
     # -- Database --
-    # Postgres everywhere. DATABASE_URL wins; otherwise SUPABASE_DB_CONN_STR
-    # (point it at Supabase's transaction pooler, port 6543); otherwise a
-    # local Postgres.
-    database_url: str = Field(
-        "postgresql://thalace:thalace@localhost:5432/thalace",
-        validation_alias=AliasChoices("DATABASE_URL", "SUPABASE_DB_CONN_STR"),
-    )
+    # Postgres everywhere. Local dev: the docker-compose.yml service on 5433
+    # (DATABASE_URL in .env). Production: Supabase's transaction pooler
+    # (port 6543), set as DATABASE_URL on Railway. Only DATABASE_URL is read,
+    # never SUPABASE_DB_CONN_STR, so local dev can't reach production by
+    # falling back to it.
+    database_url: str = "postgresql://thalace:thalace@localhost:5433/thalace"
     db_pool_size: int = 5
     db_max_overflow: int = 10
 
@@ -62,8 +65,8 @@ class Settings(BaseSettings):
     openai_api_key: str = Field("", validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPENAI_API_KEY"))
     # Qwen models, tried in order (comma-separated in env). `llm_models` serves
     # reasoning calls; `llm_cheap_models` the bulk extraction/condensing calls.
-    llm_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["qwen-plus-2025-04-28", "qwen-plus-2025-07-14", "qwen-plus-latest", "qwen-max"])
-    llm_cheap_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["qwen-plus-2025-04-28", "qwen-plus-2025-07-14", "qwen-plus-latest", "qwen-max"])
+    llm_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(_QWEN_MODELS))
+    llm_cheap_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(_QWEN_MODELS))
     # Second provider (OpenRouter), tried in order when every Qwen model fails.
     llm_fallback_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["openai/gpt-4o-mini"])
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -100,7 +103,80 @@ class Settings(BaseSettings):
     platform_fee_bps: int = 200
     platform_fee_max_bps: int = 1000
     near_intents_agent_api_url: str = "https://api.demo.agentsonintents.com"
+    near_intents_timeout_s: float = 30.0
+    # Encrypts each shop's grant token at rest (a Fernet key). Never change it:
+    # live shops couldn't pay out until their owners signed again.
+    shop_grant_key: str = ""
+    # How long the backend's grant on a shop's wallet lasts (the API allows 365).
+    shop_grant_days: int = 180
     near_ai_cloud_base_url: str = "https://cloud-api.near.ai/v1"
+    # NEAR AI Cloud models for agent steps, tried in order before Qwen. Each
+    # was checked to call tools (2026-11-09); qwen/qwen3.7-max answered 502.
+    near_ai_models: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["z-ai/glm-5.3", "Qwen/Qwen3.8-27B", "deepseek/deepseek-v4.1-flash"])
+
+    # -- Shops --
+    # Native USDC on NEAR: what a sale is credited as unless the owner picks
+    # another asset (asset ids from the Agent API's GET /v1/tokens).
+    default_settlement_asset: str = "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"
+    default_daily_budget_usd: int = 20
+    max_shops_per_owner: int = 10
+    max_offers_per_shop: int = 50
+    max_payees_per_shop: int = 10
+    # The highest daily cap an owner may sign: keeps a mistyped cap from
+    # letting a shop move far more than a small business would.
+    max_daily_budget_usd: int = 1000
+    # -- Invoices and payments --
+    # Dollar stablecoins a buyer may pay with (asset ids from GET /v1/tokens);
+    # each is credited to the shop as its settlement asset.
+    pay_assets: Annotated[list[str], NoDecode] = Field(default_factory=lambda: [
+        "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",  # USDC, NEAR
+        "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",  # USDC, Base
+        "nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near",  # USDC, Arbitrum
+        "nep141:sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near",  # USDC, Solana
+        "nep141:eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near",  # USDC, Ethereum
+        "nep141:usdt.tether-token.near",  # USDT, NEAR
+        "nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near",  # USDT, Tron
+    ])
+    # How long the Agent API's token list is reused before reading it again.
+    tokens_cache_s: float = 300.0
+    max_invoice_quantity: int = 100
+    invoices_per_ip_per_hour: int = 20
+    # The header holding the visitor's IP. Locally Vite and Cloudflare set
+    # x-forwarded-for (first entry); on Railway set x-real-ip, because Caddy
+    # rewrites x-forwarded-for with Railway's edge address.
+    client_ip_header: str = "x-forwarded-for"
+    # Salt for the stored IP hash: rate limiting without keeping raw IPs.
+    ip_hash_salt: str = "thalace-shops"
+    # The background loop that watches payments and sends payouts.
+    watcher_enabled: bool = True
+    watcher_interval_s: float = 10.0
+    watcher_batch: int = 50
+    # An invoice page asks the Agent API itself when the watcher hasn't for this long.
+    invoice_recheck_s: float = 5.0
+
+    # -- Agents buying from shops --
+    # Offers a buyer may make in one negotiation before it must accept or walk away.
+    negotiation_max_offers: int = 3
+    # Group orders (docs/RULES.md).
+    group_order_max_window_hours: int = 72
+    group_order_min_minutes: int = 10
+    group_order_max_members: int = 100
+    # Shops and offers one directory search returns at most.
+    directory_limit: int = 20
+
+    # -- Shop agent --
+    # Per owner turn: tool calls before the agent must answer, the
+    # conversation re-sent each step, and the turn's wall clock.
+    agent_max_tool_calls_per_turn: int = 12
+    agent_history_token_budget: int = 16_000
+    agent_turn_timeout_s: float = 180.0
+    max_agent_turns_per_day: int = 100
+    # Characters of one web page the agent reads.
+    website_read_max_chars: int = 30_000
+    # How long a verified Supabase access token is trusted before asking again.
+    auth_cache_ttl_s: float = 60.0
+    supabase_timeout_s: float = 10.0
 
     # -- KRA (Kenya Revenue Authority) API credentials, one pair per product --
     kra_taxpayer_obligations_cons_key: str = ""
@@ -138,7 +214,8 @@ class Settings(BaseSettings):
             raise ValueError("at least one model is required")
         return value
 
-    @field_validator("allowed_origins", "admin_bootstrap_emails", "llm_models", "llm_cheap_models", "llm_fallback_models", mode="before")
+    @field_validator("allowed_origins", "admin_bootstrap_emails", "llm_models", "llm_cheap_models",
+                     "llm_fallback_models", "near_ai_models", "pay_assets", mode="before")
     @classmethod
     def _parse_str_list(cls, value):
         """Accept a comma-separated string or a JSON array from the env."""

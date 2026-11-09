@@ -1,8 +1,8 @@
-import time
 import json
 import random
 import re
 import threading
+import time
 from typing import Any, Callable, Protocol, Sequence
 
 from langchain_core.callbacks import UsageMetadataCallbackHandler
@@ -10,8 +10,8 @@ from langchain_core.messages import AIMessage, message_chunk_to_message
 from langchain_openai import ChatOpenAI
 from langchain_qwq import ChatQwen
 
-from utils.log import current_run_id, logger  # noqa: F401 -- current_run_id is re-exported for callers of agents.llm
 from config import get_settings
+from utils.log import current_run_id, logger  # noqa: F401 -- current_run_id is re-exported for callers of agents.llm
 
 
 class _ChatQwen(ChatQwen):
@@ -55,6 +55,10 @@ CHEAP_QWEN_MODELS: list[str] = [m for m in cfg.llm_cheap_models if m.strip()]
 
 FALLBACK_MODELS: list[str] = [m for m in cfg.llm_fallback_models if m.strip()]
 
+# NEAR AI Cloud (OpenAI-compatible) runs the shop agents first when its key
+# is set: the agents buy their own inference on NEAR.
+NEAR_AI_MODELS: list[str] = [m for m in cfg.near_ai_models if m.strip()]
+
 # Output ceiling for every call. Above the largest real structured output
 # (~8k tokens), so it only stops a runaway: one page summary on a model that
 # forces thinking once wrote 16k tokens over 169s.
@@ -70,8 +74,12 @@ def _with_fallback(primary: list[tuple[str, list[str]]]) -> list[tuple[str, list
     return primary + ([("openrouter", FALLBACK_MODELS)] if cfg.openai_api_key and FALLBACK_MODELS else [])
 
 
+def _near_ai_first() -> list[tuple[str, list[str]]]:
+    return [("nearai", NEAR_AI_MODELS)] if cfg.near_ai_cloud_api_key and NEAR_AI_MODELS else []
+
+
 def default_providers() -> list[tuple[str, list[str]]]:
-    return _with_fallback([("qwen", QWEN_MODELS)])
+    return _with_fallback(_near_ai_first() + [("qwen", QWEN_MODELS)])
 
 
 def cheap_providers() -> list[tuple[str, list[str]]]:
@@ -470,6 +478,18 @@ def _llm(
             # Streamed calls report token usage only when asked to.
             stream_usage=True,
             **kwargs,
+        )
+    if provider == "nearai":
+        m = model or NEAR_AI_MODELS[0]
+        logger.info("Using NEAR AI Cloud (%s)", m)
+        return ChatOpenAI(
+            model=m,
+            api_key=cfg.near_ai_cloud_api_key,
+            base_url=cfg.near_ai_cloud_base_url,
+            timeout=cfg.llm_call_timeout_s,
+            max_retries=0,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            stream_usage=True,
         )
     if provider == "openrouter":
         m = model or FALLBACK_MODELS[0]

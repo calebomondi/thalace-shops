@@ -1,25 +1,44 @@
-:root {
-  --text: #1f2328;
-  --bg: #ffffff;
-  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+@import 'tailwindcss';
+
+/* Colour tokens: a warm paper ground with deep ink, and a terracotta accent
+   that nods to the Shanga workshop. Dark mode swaps the ground, not the voice. */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+
+  --color-paper: #faf7f2;
+  --color-card: #ffffff;
+  --color-ink: #1d1a16;
+  --color-muted: #6b645a;
+  --color-line: #e7e0d5;
+  --color-accent: #b4532a;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #f6e6dc;
+  --color-ok: #2f6b45;
+  --color-ok-soft: #e1efe5;
+  --color-danger: #a33a2c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #e6edf3;
-    --bg: #0d1117;
+    --color-paper: #15130f;
+    --color-card: #1e1b16;
+    --color-ink: #f2ede4;
+    --color-muted: #a59d90;
+    --color-line: #332e26;
+    --color-accent: #e07a4c;
+    --color-accent-ink: #1d1a16;
+    --color-accent-soft: #3a2519;
+    --color-ok: #7cc495;
+    --color-ok-soft: #1f3326;
+    --color-danger: #f08a7a;
   }
 }
 
-body {
-  margin: 0;
+html {
+  color-scheme: light dark;
 }
 
-main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+body {
+  @apply bg-paper text-ink font-sans antialiased;
 }

@@ -5,8 +5,8 @@ FastAPI API and LangGraph agents, Python 3.14, managed with uv. Run every comman
 ```sh
 cp .env.example .env   # fill in the keys
 uv sync
-./scripts/dev.sh       # http://localhost:8000
-curl localhost:8000/api/v1/health
+./scripts/dev.sh       # http://localhost:8100
+curl localhost:8100/api/v1/health
 ```
 
 | Path | What it is |

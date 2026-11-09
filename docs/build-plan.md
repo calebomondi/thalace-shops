@@ -19,11 +19,13 @@ The goal: put a business online, onchain and in front of agents as well as peopl
 | 1 | Which project is submitted | **Only Thalace Shops.** The gtmx Thalace Store (`near-hackathon` branch, PRs #366–#372, built 2026-11-01 to 11-03) is ported in and disclosed. It is not submitted separately (Q-015). |
 | 2 | What shops sell | Digital goods and services, so delivery is a link or a Markdown deliverable. Made-to-order physical work (a print job) is sold as a **service the team delivers**: the invoice is paid onchain, and fulfilment is marked done by the shop. |
 | 3 | How agents reach shops | MCP endpoint + public directory; Agent Market listing as a second channel |
-| 4 | Demo domain | `shops.thalace.com`, hosted on **Render**, database on a **new Supabase project** (connected 2026-11-08) |
+| 4 | Demo domain | `shops.thalace.com`, hosted on **Railway** (moved from Render on 2026-11-09), database on a **new Supabase project** (connected 2026-11-08) |
 | 5 | Shop-to-shop trade | Yes: a shared directory, negotiation between agents, group bulk orders |
 | 6 | Demo business | **Shanga Prints** (https://prints.shangalabs.com), a real Nairobi digital-manufacturing business (§9) |
 | 7 | Platform fee | Thalace takes a fee on each sale, **set by the admin** (§6.2) |
 | 8 | Who opens a group order | The **seller turns group buying on** for an offer and sets its tiers; **any buyer** (a shop or an outside agent) can then open one (§7.3) |
+| 9 | Sign-in | Supabase Auth with **email magic link and Google** |
+| 10 | Local database | **Docker Postgres** on port 5433 (`backend/docker-compose.yml`); Supabase is production only |
 
 ---
 
@@ -202,12 +204,12 @@ The Agent API policy covers actions, assets, limits, **destinations**, a USD bud
 
 | Day | Date | Focus | Done when | Priority |
 |---|---|---|---|---|
-| 0 | Sun 11-08 | **Unblock.** Supabase connected ✅, Render chosen ✅. Agent API approval pending, so **build against the demo key** (partners.demo.agentsonintents.com, base URL `api.demo.agentsonintents.com`) and switch to the `naa_…` key when it's approved. `STORE_GRANT_KEY`. Deploy the skeleton to `shops.thalace.com` with HTTPS and Supabase Postgres. Read the docs on the items in §10. | `https://shops.thalace.com/api/v1/health` answers; Agent API `tokens()` works with the key | P0 |
-| 1 | Mon 11-09 | **Foundations.** Supabase auth, Alembic, tables from §5. Port the Agent API client and its tests. Shop create / list API. NEAR AI Cloud as the first LLM provider. | A founder signs in, creates two shops, sees them listed; tests green | P0 |
-| 2 | Tue 11-10 | **Shop agent + console.** Port the ReAct loop and tool guard. Shop tools: draft catalog, set offer (owner confirms), sales status, read the ledger. Console: shops list, shop page, rules, passkey go-live (port). | Owner chats with the shop agent, it drafts offers, the owner signs the shop live on `shops.thalace.com` | P0 |
-| 3 | Wed 11-11 | **Invoices end to end.** Invoice model and public page, deposit quote, watcher, delivery, payouts with split, ledger page, CSV. **First real $1 loop on mainnet** (asks first). | A human pays $1 from another chain; the invoice reads paid → delivered → settled, with tx links | P0 |
-| 4 | Thu 11-12 | **Agents as buyers.** MCP server (`search_shops`, `get_offer`, `negotiate`, `place_order`, `invoice_status`), the negotiation protocol (§7.2), the directory page. | Claude (MCP) finds a shop, negotiates once, gets an invoice, pays it; the founder reads the negotiation log | P1 |
-| 5 | Fri 11-13 | **Swarm.** `RULES.md`, group orders (§7.3), procurement with allowed suppliers (§7.4), simulation mode, live market page, kill switch. KRA PIN check tool. | 10 scripted shops fill a group order to the 10+ tier; each pays its own invoice | P1/P2 |
+| 0 | Sun 11-08 | **Unblock.** Supabase connected ✅, hosting chosen ✅ (Railway since 2026-11-09). Agent API approval pending, so **build against the demo key** (partners.demo.agentsonintents.com, base URL `api.demo.agentsonintents.com`) and switch to the `naa_…` key when it's approved. `STORE_GRANT_KEY`. Deploy the skeleton to `shops.thalace.com` with HTTPS and Supabase Postgres. Read the docs on the items in §10. | `https://shops.thalace.com/api/v1/health` answers; Agent API `tokens()` works with the key | P0 |
+| 1 | Mon 11-09 | **Foundations.** ✅ Supabase sign-in (magic link + Google), Alembic, the first tables (shops, offers, payees, platform settings, admin audit log; invoices, ledger and owner signatures come with their features), Agent API client and tests ported, shops API, admin fee API, NEAR AI Cloud first in the LLM ladder (GLM-5.3, Qwen3.8-27B, DeepSeek V4.1 Flash), sign-in and shops screens. Dev ports: API 8100, app 5180. | A founder signs in, creates two shops, sees them listed; tests green | P0 |
+| 2 | Tue 11-10 | **Done early (Mon 11-09).** ✅ Shop page (offers, money rules, agent chat); shop agent (ReAct loop ported from gtmx, tools: shop_overview, list_offers, read_website via Firecrawl, draft_offer, update_draft_offer; checked live on Shanga's site); passkey go-live ported from the gtmx Store, one passkey per founder per site owning every shop's wallet, the fee account in every policy. Test go-live through a Cloudflare tunnel (FRONTEND_BASE_URL = the tunnel); tunnel shops are throwaway. | Owner chats with the shop agent, it drafts offers, the owner signs the shop live on `shops.thalace.com` | P0 |
+| 3 | Wed 11-11 | **Built early (Mon 11-09); real $1 test pending.** ✅ Invoices numbered per shop with the fee in force; a deposit address quoted only when the buyer picks a coin (real quotes checked: $1 is the minimum on USDC Base and NEAR, quotes last ~4 days); a watcher in the API reads payments (amount_out, tx hash), expiries and refunds; the fee then payees go out one at a time, ledger first; public shop page, invoice page with QR and live status, public ledger, owner invoices with delivery, ledger CSV. Email receipts not built (no sending domain). | A human pays $1 from another chain; the invoice reads paid → delivered → settled, with tx links | P0 |
+| 4 | Thu 11-12 | **Built early (Mon 11-09).** ✅ MCP server at /mcp (SDK 2.x, stateless JSON): search_shops, get_shop, negotiate, respond_to_counter, place_order, invoice_status. Negotiation protocol enforced in code (≤3 buyer offers, never below the floor, counters clamped, floor never revealed, buyer words quoted, rule fallback). Directory search and page with "Connect your agent"; owner's negotiation log. Checked live: $25 offer → $40 counter → $32 agreed (floor $30). | Claude (MCP) finds a shop, negotiates once, gets an invoice, pays it; the founder reads the negotiation log | P1 |
+| 5 | Fri 11-13 | **Built early (Mon 11-09).** ✅ docs/RULES.md first (price locks at close; each member's own invoice; no shared pot). Group orders: seller tiers ≥ floor, one open per offer, joins until the deadline, the watcher closes and invoices; /market page and membership pages; MCP tools for agents. Shop-to-shop buying from allowed suppliers, paid by Intents transfer within the cap; shops in group orders pay from their wallet at the close. policy_update for live shops (payees, cap, suppliers), freeze/unfreeze and pause/resume. Market simulator (scripted, no LLM, no payments). KRA PIN check not built. | 10 scripted shops fill a group order to the 10+ tier; each pays its own invoice | P1/P2 |
 | 6 | Sat 11-14 | **Ship.** Feature freeze at **12:00 UTC**. README for judges, demo video, X post draft, `hackathon-submission` tag, submission payload printed for your yes. Agent Market listing if there's time. | Submitted before **23:59 UTC**, with a few hours' margin | P0 |
 
 **Cut lines (decide on the day, don't let it drift):**
@@ -307,7 +309,7 @@ Sources: Agent API [How it works](https://docs.agentsonintents.com/integration/a
 
 ## 12. Open questions
 
-Answered 2026-11-08: demo business (Shanga Prints), hosting (Render + new Supabase), platform fee (admin-set), group orders (seller enables, any buyer opens). See §2.
+Answered 2026-11-08: demo business (Shanga Prints), hosting (Railway + new Supabase), platform fee (admin-set), group orders (seller enables, any buyer opens). See §2.
 
 Also answered: Shanga belongs to the founder; the fee goes to `NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`.
 
