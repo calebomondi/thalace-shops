@@ -9,8 +9,10 @@ services:
       POSTGRES_USER: thalace
       POSTGRES_PASSWORD: thalace
       POSTGRES_DB: thalace
+    # Reachable from this machine only. The password is a throwaway for
+    # local development; production uses Supabase (docs/deploy-railway.md).
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - thalace-shops-pg:/var/lib/postgresql/data
     healthcheck:
