@@ -5,6 +5,9 @@ import { AuthCallbackPage } from './features/auth/auth-callback-page'
 import { SignInPage } from './features/auth/sign-in-page'
 import { ShopPage } from './features/shop/shop-page'
 import { ShopsPage } from './features/shops/shops-page'
+import { InvoicePage } from './features/storefront/invoice-page'
+import { PublicLedgerPage } from './features/storefront/public-ledger-page'
+import { ShopFrontPage } from './features/storefront/shop-front-page'
 import { useAuth } from './lib/auth-context'
 import { HOME_PATH, safeNextPath } from './lib/next-path'
 
@@ -36,6 +39,10 @@ function App() {
       <Route path="/auth/sign-in" element={<SignInRoute />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/auth/sign-in" replace />} />
+      {/* Public: anyone can buy, pay and check the ledger without an account. */}
+      <Route path="/s/:slug" element={<ShopFrontPage />} />
+      <Route path="/s/:slug/ledger" element={<PublicLedgerPage />} />
+      <Route path="/i/:token" element={<InvoicePage />} />
       <Route element={<RequireSession />}>
         <Route index element={<ShopsPage />} />
         <Route path="shops/:shopId" element={<ShopPage />} />

@@ -8,6 +8,7 @@ import { AgentChat } from './agent-chat'
 import { GoLivePanel } from './go-live-panel'
 import { OffersPanel } from './offers-panel'
 import { RulesPanel } from './rules-panel'
+import { SalesPanel } from './sales-panel'
 
 function ShopView({ shop, onShopChange }: { shop: Shop; onShopChange: (s: Shop) => void }) {
   // Bumped after each agent turn: the offers panel reloads what the agent drafted.
@@ -30,6 +31,7 @@ function ShopView({ shop, onShopChange }: { shop: Shop; onShopChange: (s: Shop) 
       </div>
       <div className="grid gap-6 lg:grid-cols-[1fr_26rem]">
         <div className="min-w-0 space-y-6">
+          <SalesPanel shop={shop} />
           <OffersPanel key={offersVersion} shopId={shop.id} />
           <RulesPanel shop={shop} onShopChange={onShopChange} />
           <GoLivePanel shop={shop} onShop={onShopChange} />
