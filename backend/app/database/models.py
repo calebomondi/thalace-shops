@@ -302,6 +302,9 @@ class ShopIntent(Base):
     requested_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     # A grant_issue's token, encrypted, until the grant is live on the shop.
     grant_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A policy_update's new rules (payees, cap, suppliers), applied to our
+    # records only once NEAR Intents confirms them. Opaque: nothing filters on it.
+    pending_rules: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = _created()
@@ -349,6 +352,9 @@ class Invoice(Base):
     buyer_kind: Mapped[str] = mapped_column(String(8), nullable=False)
     buyer_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     buyer_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Set when the buyer is another shop, which pays from its own wallet.
+    buyer_shop_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("shops.id", ondelete="SET NULL"),
+                                                            nullable=True, index=True)
     # Salted hash of the buyer's IP, to rate limit invoices; never the IP.
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(18), nullable=False, default="open", server_default="open")
@@ -541,7 +547,28 @@ class GroupOrderMember(Base):
     buyer_kind: Mapped[str] = mapped_column(String(8), nullable=False)
     buyer_name: Mapped[str] = mapped_column(String(120), nullable=False)
     buyer_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # A shop joining pays its invoice from its own wallet once the order closes.
+    buyer_shop_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("shops.id", ondelete="SET NULL"),
+                                                            nullable=True, index=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id", ondelete="SET NULL"),
                                                          nullable=True, index=True)
+    created_at: Mapped[datetime] = _created()
+
+
+class ShopSupplier(Base):
+    """A shop this shop may buy from: its wallet is a destination in this
+    shop's signed policy, so its agent can pay that supplier and no other."""
+
+    __tablename__ = "shop_suppliers"
+    __table_args__ = (
+        CheckConstraint("shop_id <> supplier_shop_id", name="not_itself"),
+        UniqueConstraint("shop_id", "supplier_shop_id", name="uq_shop_suppliers_shop_id_supplier_shop_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the unique constraint, which leads with it.
+    shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    supplier_shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), nullable=False,
+                                                        index=True)
     created_at: Mapped[datetime] = _created()

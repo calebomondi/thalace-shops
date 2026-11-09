@@ -3,9 +3,11 @@ from fastapi import APIRouter, status
 from app.api.deps import CurrentUser, DbSession, OwnedShop
 from app.schemas.shops import ShopOut
 from app.schemas.signing import (
+    FreezeIn,
     PasskeyIn,
     PasskeyStatusOut,
     PendingSignatureOut,
+    RulesChangeIn,
     SignatureStatusOut,
     SignedIn,
 )
@@ -51,3 +53,21 @@ async def submit_signature(correlation_id: str, body: SignedIn, shop: OwnedShop,
 async def signature_status(correlation_id: str, shop: OwnedShop, user: CurrentUser,
                            db: DbSession) -> SignatureStatusOut:
     return _status(await signing.refresh_signature(db, shop, user.id, correlation_id), shop)
+
+
+@router.post("/shops/{shop_id}/wallet/freeze", response_model=PendingSignatureOut,
+             status_code=status.HTTP_201_CREATED)
+async def request_freeze(body: FreezeIn, shop: OwnedShop, user: CurrentUser, db: DbSession) -> PendingSignatureOut:
+    """The wallet's emergency stop (or its release), for the owner to sign."""
+    return PendingSignatureOut(**(await signing.request_freeze(db, shop, user.id, body.freeze)).__dict__)
+
+
+@router.post("/shops/{shop_id}/wallet/rules", response_model=PendingSignatureOut,
+             status_code=status.HTTP_201_CREATED)
+async def request_rules_change(body: RulesChangeIn, shop: OwnedShop, user: CurrentUser,
+                               db: DbSession) -> PendingSignatureOut:
+    """New payees, cap and allowed suppliers for a live shop, for the owner to sign."""
+    pending = await signing.request_rules_change(
+        db, shop, user.id, payees=[p.model_dump() for p in body.payees], daily_budget_usd=body.daily_budget_usd,
+        supplier_shop_ids=body.supplier_shop_ids)
+    return PendingSignatureOut(**pending.__dict__)

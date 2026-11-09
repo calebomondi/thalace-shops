@@ -13,7 +13,7 @@ from langchain_core.tools import BaseTool, tool
 
 from agents.schemas.agent import OfferDraft, ToolResult
 from agents.schemas.shop import OfferDelivery, OfferKind
-from agents.shop.store import DraftOnlyError, ShopNotFoundError, ShopStore
+from agents.shop.store import DraftOnlyError, PurchaseRefusedError, ShopNotFoundError, ShopStore
 from data_sources.web.firecrawl import Page, PageReadError
 from utils.log import logger
 
@@ -137,4 +137,61 @@ def build_tools(store: ShopStore, read_page: PageReader) -> list[BaseTool]:
             return ToolResult.failure("That offer is on sale or archived: only the owner can change it now.")
         return ToolResult.success(f"Updated the draft \"{offer.title}\".", offer.model_dump(mode="json"))
 
-    return [shop_overview, list_offers, read_website, draft_offer, update_draft_offer]
+    @tool
+    @_guarded
+    async def sales_summary() -> ToolResult:
+        """How the shop is selling: invoices paid and revenue, invoices awaiting
+        payment, open negotiations and open group orders."""
+        summary = await store.sales()
+        return ToolResult.success(f"{summary.invoices_paid} paid, ${summary.revenue_usd} revenue.",
+                                  summary.model_dump(mode="json"))
+
+    @tool
+    @_guarded
+    async def find_suppliers(query: str = "") -> ToolResult:
+        """Search other live shops and their offers (all, when query is empty).
+        allowed_supplier says whether this shop may pay them; only the owner
+        can allow a new supplier, by signing new rules."""
+        shops = await store.find_suppliers(query)
+        if not shops:
+            return ToolResult.success("No other live shops match.", [])
+        return ToolResult.success(f"{len(shops)} shops.", [s.model_dump(mode="json") for s in shops])
+
+    @tool
+    @_guarded
+    async def buy_from_supplier(offer_id: str, quantity: int = 1) -> ToolResult:
+        """Buy an offer at its list price from an allowed supplier, paid from
+        this shop's own wallet (within its daily cap). Only buy what the owner
+        asked for or clearly needs; say what you bought and why."""
+        try:
+            purchase = await store.buy(UUID(offer_id), quantity)
+        except ValueError:
+            return ToolResult.failure(f"{offer_id} isn't an offer id. Call find_suppliers for the ids.")
+        except PurchaseRefusedError as exc:
+            return ToolResult.failure(str(exc))
+        return ToolResult.success(f"Bought {purchase.quantity} × {purchase.item} from {purchase.supplier} for "
+                                  f"${purchase.total_usd}; the payment is queued from the wallet.",
+                                  purchase.model_dump(mode="json"))
+
+    @tool
+    @_guarded
+    async def list_group_orders() -> ToolResult:
+        """Open group orders across shops: buying together for a volume price."""
+        groups = await store.open_group_orders()
+        return ToolResult.success(f"{len(groups)} open group orders.", [g.model_dump(mode="json") for g in groups])
+
+    @tool
+    @_guarded
+    async def join_group_order(group_order_id: str, quantity: int) -> ToolResult:
+        """Join an open group order as this shop. At its deadline the price locks
+        at the tier reached and this shop's invoice is paid from its wallet,
+        if the seller is an allowed supplier."""
+        try:
+            group = await store.join_group_order(group_order_id, quantity)
+        except PurchaseRefusedError as exc:
+            return ToolResult.failure(str(exc))
+        return ToolResult.success(f"Joined with {quantity}; {group.committed_quantity} committed so far at "
+                                  f"${group.unit_price_usd} each.", group.model_dump(mode="json"))
+
+    return [shop_overview, list_offers, read_website, draft_offer, update_draft_offer, sales_summary,
+            find_suppliers, buy_from_supplier, list_group_orders, join_group_order]

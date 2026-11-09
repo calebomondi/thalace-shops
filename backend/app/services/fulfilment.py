@@ -18,10 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agents.schemas.shop import FULL_SHARE_BPS
 from app.database.connect import AsyncSessionLocal
 from app.database.models import Invoice, LedgerEntry, Payee, Shop
+from app.services import invoices, signing
 from app.services import platform as platform_service
-from app.services import signing
 from app.services.errors import ConflictError
-from app.services.invoices import pay_options
 from config import settings
 from data_sources.near.agent_api import AgentApi, AgentApiError, new_idempotency_key
 from utils.log import logger
@@ -30,14 +29,11 @@ from utils.log import logger
 # and is sent again, under the same key, on a later round.
 WAIT_CODES = frozenset({"wallet_busy", "spend_budget_exceeded", "policy_limit_exceeded",
                         "policy_action_limit_exceeded", "policy_schedule_denied", "wallet_frozen", "policy_not_ready"})
-_OUTGOING = ("fee", "payout")
-
-
-async def _decimals(asset: str) -> int:
-    for token in await pay_options():
-        if token.asset_id == asset:
-            return token.decimals
-    raise ConflictError(f"NEAR Intents doesn't list {asset}.")
+# Lines that move money out of a shop's wallet, through its one-at-a-time queue.
+_OUTGOING = ("fee", "payout", "purchase")
+# The split of a sale. A buyer shop's purchase line points at the seller's
+# invoice too, so "already planned" looks only at these.
+_SPLIT = ("fee", "payout")
 
 
 def split(base: Decimal, fee_bps: int, payees: list[Payee]) -> tuple[Decimal, list[tuple[Payee, Decimal]]]:
@@ -60,19 +56,19 @@ def _line(shop: Shop, invoice: Invoice, kind: str, amount: Decimal, counterparty
 async def plan_payouts(db: AsyncSession) -> int:
     """Write the pending fee and payout lines for each paid invoice that has
     none yet. Returns how many lines were written."""
-    planned = exists().where(LedgerEntry.invoice_id == Invoice.id, LedgerEntry.kind.in_(_OUTGOING))
-    invoices = list((await db.scalars(
+    planned = exists().where(LedgerEntry.invoice_id == Invoice.id, LedgerEntry.kind.in_(_SPLIT))
+    due = list((await db.scalars(
         select(Invoice).join(Shop, Shop.id == Invoice.shop_id)
         .where(Invoice.status.in_(("paid", "delivered")), Invoice.credited_raw.is_not(None),
                Shop.grant_id.is_not(None), ~planned)
         .order_by(Invoice.paid_at).limit(settings.watcher_batch))).all())
-    if not invoices:
+    if not due:
         return 0
     platform = await platform_service.get_platform(db)
     written = 0
-    for invoice in invoices:
+    for invoice in due:
         shop = await db.get(Shop, invoice.shop_id)
-        decimals = await _decimals(shop.settlement_asset)
+        decimals = await invoices.settlement_decimals(shop.settlement_asset)
         payees = list((await db.scalars(select(Payee).where(Payee.shop_id == shop.id))).all())
         fee, shares = split(invoice.credited_raw, invoice.fee_bps, payees)
         if fee > 0:
@@ -153,6 +149,10 @@ async def settle_payouts(db: AsyncSession) -> int:
         if op.status == "SUCCESS":
             entry.status, entry.settled_at = "done", datetime.now(UTC)
             entry.tx_hash = op.details.get("tx_hash") or op.details.get("destination_tx_hash")
+            if entry.kind == "purchase" and entry.invoice_id:
+                # The supplier's invoice is paid by this transfer.
+                supplier_invoice = await db.get(Invoice, entry.invoice_id)
+                await invoices.settle_by_transfer(db, supplier_invoice, entry.amount_raw, entry.tx_hash)
             done += 1
         else:
             _failed(entry, op.failure_code or op.status.lower())
@@ -161,13 +161,14 @@ async def settle_payouts(db: AsyncSession) -> int:
 
 
 async def fulfil() -> int:
-    """One round after the payment watcher: plan the fee and payouts, settle
-    what was sent, then send the next. Settling first frees a wallet whose
-    last action finished, so its next line goes out in the same round.
-    Returns how many completed."""
+    """One round after the payment watcher: settle what was sent, plan the fee
+    and payouts of what's newly paid, then send the next. Settling first frees
+    a wallet whose last action finished, and lets a purchase that just settled
+    (a supplier's invoice paid) be planned in the same round. Returns how many
+    completed."""
     async with AsyncSessionLocal() as db:
-        await plan_payouts(db)
         done = await settle_payouts(db)
+        await plan_payouts(db)
         await send_payouts(db)
         return done
 

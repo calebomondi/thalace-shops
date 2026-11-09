@@ -20,6 +20,7 @@ from agents.schemas.shop import BuyerKind
 from app.database.connect import AsyncSessionLocal
 from app.database.models import GroupOrder, GroupOrderMember, Invoice, Offer, OfferTier, Shop
 from app.services import invoices as invoice_service
+from app.services import procurement
 from app.services.errors import ConflictError, InvalidInputError, NotFoundError, ServiceError
 from config import settings
 from utils.log import logger
@@ -122,7 +123,7 @@ async def by_token(db: AsyncSession, token: str) -> GroupOrder:
 
 
 async def join(db: AsyncSession, token: str, *, quantity: int, buyer_kind: BuyerKind, buyer_name: str,
-               buyer_email: str | None) -> GroupOrderMember:
+               buyer_email: str | None, buyer_shop_id: uuid.UUID | None = None) -> GroupOrderMember:
     _check_buyer(buyer_kind, buyer_email, quantity)
     # Locked so a join can't slip in while the watcher closes it.
     group = await db.scalar(select(GroupOrder).where(GroupOrder.public_token == token).with_for_update())
@@ -136,7 +137,7 @@ async def join(db: AsyncSession, token: str, *, quantity: int, buyer_kind: Buyer
         raise ConflictError("This group order is full.")
     member = GroupOrderMember(group_order_id=group.id, public_token=secrets.token_urlsafe(24), buyer_kind=buyer_kind,
                               buyer_name=buyer_name.strip()[:120] or "A buyer", buyer_email=buyer_email,
-                              quantity=quantity)
+                              buyer_shop_id=buyer_shop_id, quantity=quantity)
     db.add(member)
     await db.commit()
     return member
@@ -211,10 +212,26 @@ async def close(db: AsyncSession, group: GroupOrder) -> GroupView:
         invoice: Invoice = await invoice_service.issue_invoice(
             db, current.shop, offer_id=current.offer.id, quantity=member.quantity,
             unit_price_cents=group.unit_price_cents, buyer_kind=member.buyer_kind, buyer_email=member.buyer_email,
-            buyer_name=member.buyer_name, ip_hash=None)
+            buyer_name=member.buyer_name, ip_hash=None, buyer_shop_id=member.buyer_shop_id)
         member.invoice_id = invoice.id
     await db.commit()
+    await _shops_pay(db, current)
     return current
+
+
+async def _shops_pay(db: AsyncSession, current: GroupView) -> None:
+    """Shops that joined pay their invoices from their own wallets. One that
+    can't (not an allowed supplier, frozen) leaves its invoice open to pay by hand."""
+    for member in current.members:
+        if member.buyer_shop_id is None or member.invoice_id is None:
+            continue
+        buyer = await db.get(Shop, member.buyer_shop_id)
+        invoice = await db.get(Invoice, member.invoice_id)
+        try:
+            await procurement.pay_from_wallet(db, buyer, invoice)
+        except ServiceError as exc:
+            await db.rollback()
+            logger.info("Group order %s: %s didn't pay from its wallet: %s", current.group.id, buyer.name, exc)
 
 
 async def close_due() -> int:

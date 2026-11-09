@@ -22,8 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.schemas.shop import ShopIntentType
-from app.database.models import OwnerPasskey, Payee, Shop, ShopIntent
+from app.database.models import OwnerPasskey, Payee, Shop, ShopIntent, ShopSupplier
 from app.services import platform as platform_service
+from app.services import rules
 from app.services.errors import ConflictError, InvalidInputError, NotFoundError
 from config import settings
 from data_sources.near.agent_api import AgentApi, AgentApiError, Operation, new_grant_credential, new_idempotency_key
@@ -116,7 +117,8 @@ def destination(payee: Payee) -> dict[str, Any]:
     return {"action": "withdraw", "chain": payee.chain, "address": payee.address, "memo": payee.memo}
 
 
-def build_policy(shop: Shop, payees: list[Payee], fee_account: str, decimals: int) -> dict[str, Any]:
+def build_policy(shop: Shop, payees: list[Payee], fee_account: str, decimals: int,
+                 supplier_accounts: list[str] | None = None) -> dict[str, Any]:
     """The rules the owner signs. Money leaves only to the payees and the fee
     account, only in the shop's settlement asset, never past the daily cap.
     The agent and our backend act inside it and can't change it.
@@ -126,6 +128,10 @@ def build_policy(shop: Shop, payees: list[Payee], fee_account: str, decimals: in
     requires `limits`; a dollar stablecoin's units make them equal."""
     destinations = [{"action": "transfer", "address": fee_account, "confidential": False}]
     destinations += [destination(p) for p in payees if not (p.route == "transfer" and p.address == fee_account)]
+    # Allowed suppliers: other shops' wallets this shop may pay for what it buys.
+    known = {d["address"] for d in destinations if d["action"] == "transfer"}
+    destinations += [{"action": "transfer", "address": a, "confidential": False}
+                     for a in dict.fromkeys(supplier_accounts or []) if a not in known]
     cap_atomic = str(int(shop.daily_budget_usd * 10**decimals))
     return {
         "frozen": False,
@@ -197,7 +203,8 @@ async def request_signature(db: AsyncSession, shop: Shop, user_id: uuid.UUID) ->
         platform = await platform_service.get_platform(db)
         decimals = await _decimals(shop.settlement_asset)
         fields = {"name": shop.name, "external_user_id": str(shop.id),
-                  "policy": build_policy(shop, payees, platform.fee_account, decimals),
+                  "policy": build_policy(shop, payees, platform.fee_account, decimals,
+                                         await supplier_accounts(db, shop)),
                   "owner": {"type": "passkey", "credential_id": passkey.credential_id,
                             "public_key": passkey.public_key, "rp_id": passkey.rp_id, "origin": passkey.origin}}
         shop.owner_passkey_id = passkey.id
@@ -264,6 +271,13 @@ async def _settle(db: AsyncSession, shop: Shop, row: ShopIntent, op: Operation) 
             await _apply_create(shop, op)
         elif row.type == "grant_issue":
             _apply_grant(shop, row, op)
+        elif row.type == "agent_freeze":
+            shop.frozen_at = datetime.now(UTC)
+        elif row.type == "agent_unfreeze":
+            shop.frozen_at = None
+        elif row.type == "policy_update":
+            shop.policy_revision = op.details.get("revision") or shop.policy_revision
+            await rules.apply_pending(db, shop, row.pending_rules or {})
 
 
 async def submit_signature(db: AsyncSession, shop: Shop, user_id: uuid.UUID, correlation_id: str,
@@ -299,3 +313,61 @@ async def refresh_signature(db: AsyncSession, shop: Shop, user_id: uuid.UUID, co
         await db.commit()
         await db.refresh(shop)
     return row
+
+
+# -- After go-live: the kill switch and changing the rules ----------------------
+
+async def supplier_accounts(db: AsyncSession, shop: Shop) -> list[str]:
+    """The wallets of the shops this shop may buy from."""
+    rows = await db.scalars(select(Shop.wallet_account_id).join(ShopSupplier, ShopSupplier.supplier_shop_id == Shop.id)
+                            .where(ShopSupplier.shop_id == shop.id, Shop.wallet_account_id.is_not(None)))
+    return list(rows)
+
+
+async def _generate(db: AsyncSession, shop: Shop, user_id: uuid.UUID, kind: ShopIntentType, fields: dict[str, Any],
+                    pending_rules: dict | None = None) -> PendingSignature:
+    try:
+        generated = await agent_api().generate_intent(kind, fields,
+                                                      idempotency_key=new_idempotency_key(f"{kind}:{shop.id}"))
+    except AgentApiError as exc:
+        raise _refusal(exc) from exc
+    expires_at = datetime.fromisoformat(generated.expires_at.replace("Z", "+00:00"))
+    db.add(ShopIntent(shop_id=shop.id, correlation_id=generated.correlation_id, type=kind, requested_by=user_id,
+                      pending_rules=pending_rules, expires_at=expires_at))
+    await db.commit()
+    return PendingSignature(correlation_id=generated.correlation_id, type=kind, intent=generated.intent,
+                            preview=generated.preview, expires_at=expires_at)
+
+
+def _wallet_open(shop: Shop) -> None:
+    if shop.agent_id is None:
+        raise ConflictError("This shop has no wallet yet: take it live first.")
+
+
+async def request_freeze(db: AsyncSession, shop: Shop, user_id: uuid.UUID, freeze: bool) -> PendingSignature:
+    """The owner's emergency stop: a frozen wallet refuses every action, until unfrozen."""
+    _wallet_open(shop)
+    if freeze == (shop.frozen_at is not None):
+        raise ConflictError("The wallet is already frozen." if freeze else "The wallet isn't frozen.")
+    return await _generate(db, shop, user_id, "agent_freeze" if freeze else "agent_unfreeze",
+                           {"agent_id": shop.agent_id})
+
+
+async def request_rules_change(db: AsyncSession, shop: Shop, user_id: uuid.UUID, *, payees: list[dict],
+                               daily_budget_usd, supplier_shop_ids: list[uuid.UUID]) -> PendingSignature:
+    """A new complete policy for a live shop's wallet: its payees, daily cap and
+    allowed suppliers. Our records change only once NEAR Intents confirms it."""
+    _wallet_open(shop)
+    pending = await rules.check_new_rules(db, shop, payees=payees, daily_budget_usd=daily_budget_usd,
+                                          supplier_shop_ids=supplier_shop_ids)
+    platform = await platform_service.get_platform(db)
+    staged = Shop(daily_budget_usd=rules.budget_of(pending), settlement_asset=shop.settlement_asset)
+    policy = build_policy(staged, rules.payees_of(shop, pending), platform.fee_account,
+                          await _decimals(shop.settlement_asset), pending["supplier_accounts"])
+    try:
+        current = await agent_api().policy(shop.agent_id)
+    except AgentApiError as exc:
+        raise _refusal(exc) from exc
+    revision = current.get("revision", shop.policy_revision)
+    return await _generate(db, shop, user_id, "policy_update",
+                           {"agent_id": shop.agent_id, "policy": policy, "expected_revision": revision}, pending)

@@ -50,6 +50,14 @@ async def pay_options() -> list[Token]:
     return [by_id[a] for a in settings.pay_assets if a in by_id]
 
 
+async def settlement_decimals(asset_id: str) -> int:
+    """Decimals of a shop's settlement asset, as NEAR Intents lists it."""
+    for token in await pay_options():
+        if token.asset_id == asset_id:
+            return token.decimals
+    raise ConflictError(f"NEAR Intents doesn't list {asset_id}.")
+
+
 def atomic_amount(cents: int, decimals: int) -> Decimal:
     """A USD amount as atomic units of a dollar stablecoin: $29.50 in a
     6-decimal coin is 29_500_000."""
@@ -110,7 +118,8 @@ async def _next_number(db: AsyncSession, shop: Shop) -> str:
 
 async def issue_invoice(db: AsyncSession, shop: Shop, *, offer_id: uuid.UUID, quantity: int,
                         unit_price_cents: int | None, buyer_kind: BuyerKind, buyer_email: str | None,
-                        buyer_name: str | None, ip_hash: str | None) -> Invoice:
+                        buyer_name: str | None, ip_hash: str | None, buyer_shop_id: uuid.UUID | None = None
+                        ) -> Invoice:
     """An invoice for an offer on sale. The unit price is the list price
     unless a negotiation agreed another, which can never be below the floor."""
     if not selling(shop):
@@ -128,7 +137,7 @@ async def issue_invoice(db: AsyncSession, shop: Shop, *, offer_id: uuid.UUID, qu
     invoice = Invoice(shop_id=shop.id, number=await _next_number(db, shop), public_token=secrets.token_urlsafe(24),
                       offer_id=offer.id, title=offer.title, quantity=quantity, unit_price_cents=price,
                       total_cents=price * quantity, fee_bps=platform.fee_bps, buyer_kind=buyer_kind,
-                      buyer_email=buyer_email, buyer_name=buyer_name, ip_hash=ip_hash)
+                      buyer_email=buyer_email, buyer_name=buyer_name, ip_hash=ip_hash, buyer_shop_id=buyer_shop_id)
     db.add(invoice)
     await db.commit()
     await db.refresh(invoice)
@@ -231,6 +240,19 @@ async def settle_payment(db: AsyncSession, invoice: Invoice, op: Operation) -> N
         invoice.status = "expired"
     else:
         invoice.status = "refunded" if op.status == "REFUNDED" else "failed"
+
+
+async def settle_by_transfer(db: AsyncSession, invoice: Invoice, amount_raw: Decimal, tx_hash: str | None) -> None:
+    """Another shop paid this invoice from its wallet with an Intents transfer
+    (procurement): there's no deposit to watch, so the confirmed transfer is the
+    payment. The rest is a normal sale: the seller's ledger, fee and payouts."""
+    if invoice.status not in ("awaiting_payment", "open"):
+        return
+    shop = await db.get(Shop, invoice.shop_id)
+    invoice.status, invoice.paid_at = "paid", datetime.now(UTC)
+    invoice.credited_raw, invoice.payment_tx_hash = amount_raw, tx_hash
+    await _record_sale(db, invoice, shop)
+    await _deliver_link(db, invoice)
 
 
 async def _deliver_link(db: AsyncSession, invoice: Invoice) -> None:

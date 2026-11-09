@@ -13,16 +13,36 @@ from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMes
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agents.schemas.agent import OfferDraft, OfferView, PayeeView, ShopView
+from agents.schemas.agent import (
+    GroupOrderView,
+    MarketOffer,
+    MarketShop,
+    OfferDraft,
+    OfferView,
+    PayeeView,
+    Purchase,
+    SalesSummary,
+    ShopView,
+)
 from agents.schemas.shop import FULL_SHARE_BPS
 from agents.shop.graph import ModelStep, build_shop_graph
-from agents.shop.store import DraftOnlyError, ShopNotFoundError
+from agents.shop.store import DraftOnlyError, PurchaseRefusedError, ShopNotFoundError
 from agents.shop.tools import PageReader
 from app.database.connect import AsyncSessionLocal
-from app.database.models import Offer, Payee, Shop, ShopMessage
+from app.database.models import (
+    GroupOrder,
+    Invoice,
+    Negotiation,
+    Offer,
+    Payee,
+    Shop,
+    ShopMessage,
+    ShopSupplier,
+)
+from app.services import directory, group_orders, procurement
 from app.services import offers as offer_service
 from app.services import platform as platform_service
-from app.services.errors import RateLimitedError, UnavailableError
+from app.services.errors import RateLimitedError, ServiceError, UnavailableError
 from config import settings
 from data_sources.web.firecrawl import read_page
 from utils.log import logger
@@ -90,6 +110,66 @@ class DbShopStore:
                 raise DraftOnlyError(str(offer_id))
             offer = await offer_service.update_offer(db, offer, draft.model_dump())
             return _offer_view(offer)
+
+    async def sales(self) -> SalesSummary:
+        async with AsyncSessionLocal() as db:
+            paid = (await db.execute(select(func.count(), func.coalesce(func.sum(Invoice.total_cents), 0))
+                                     .where(Invoice.shop_id == self._shop_id,
+                                            Invoice.status.in_(("paid", "delivered"))))).one()
+            awaiting = await db.scalar(select(func.count()).select_from(Invoice).where(
+                Invoice.shop_id == self._shop_id, Invoice.status == "awaiting_payment"))
+            talks = await db.scalar(select(func.count()).select_from(Negotiation).where(
+                Negotiation.shop_id == self._shop_id, Negotiation.status == "open"))
+            groups = await db.scalar(select(func.count()).select_from(GroupOrder).where(
+                GroupOrder.shop_id == self._shop_id, GroupOrder.status == "open"))
+            return SalesSummary(invoices_paid=paid[0], revenue_usd=_usd(paid[1]), invoices_awaiting_payment=awaiting,
+                                open_negotiations=talks, open_group_orders=groups)
+
+    async def find_suppliers(self, query: str) -> list[MarketShop]:
+        async with AsyncSessionLocal() as db:
+            allowed = set(await db.scalars(select(ShopSupplier.supplier_shop_id)
+                                           .where(ShopSupplier.shop_id == self._shop_id)))
+            found = await directory.search(db, query)
+            return [MarketShop(slug=s.slug, name=s.name, tagline=s.tagline, allowed_supplier=s.id in allowed,
+                               offers=[MarketOffer(id=o.id, title=o.title, price_usd=_usd(o.price_cents), kind=o.kind)
+                                       for o in offers])
+                    for s, offers in found if s.id != self._shop_id]
+
+    async def buy(self, offer_id: uuid.UUID, quantity: int) -> Purchase:
+        async with AsyncSessionLocal() as db:
+            buyer = await db.get(Shop, self._shop_id)
+            try:
+                invoice = await procurement.buy(db, buyer, offer_id=offer_id, quantity=quantity)
+            except ServiceError as exc:
+                raise PurchaseRefusedError(str(exc)) from None
+            supplier = await db.get(Shop, invoice.shop_id)
+            return Purchase(invoice_number=invoice.number, supplier=supplier.name, item=invoice.title,
+                            quantity=invoice.quantity, total_usd=_usd(invoice.total_cents), status=invoice.status)
+
+    async def open_group_orders(self) -> list[GroupOrderView]:
+        async with AsyncSessionLocal() as db:
+            return [_group_view(v) for v in await group_orders.market(db) if v.group.status == "open"]
+
+    async def join_group_order(self, group_order_id: str, quantity: int) -> GroupOrderView:
+        async with AsyncSessionLocal() as db:
+            buyer = await db.get(Shop, self._shop_id)
+            try:
+                group = await group_orders.by_token(db, group_order_id)
+                if group.shop_id == buyer.id:
+                    raise PurchaseRefusedError("That group order is for this shop's own offer.")
+                await group_orders.join(db, group_order_id, quantity=quantity, buyer_kind="shop",
+                                        buyer_name=buyer.name, buyer_email=None, buyer_shop_id=buyer.id)
+            except ServiceError as exc:
+                raise PurchaseRefusedError(str(exc)) from None
+            return _group_view(await group_orders.view(db, group))
+
+
+def _group_view(v: group_orders.GroupView) -> GroupOrderView:
+    return GroupOrderView(group_order_id=v.group.public_token, shop=v.shop.name, offer=v.offer.title,
+                          committed_quantity=v.committed, unit_price_usd=_usd(v.unit_price_cents),
+                          next_tier_quantity=v.next.min_quantity if v.next else None,
+                          next_tier_price_usd=_usd(v.next.unit_price_cents) if v.next else None,
+                          deadline=v.group.deadline.isoformat())
 
 
 # -- Conversation storage -----------------------------------------------------

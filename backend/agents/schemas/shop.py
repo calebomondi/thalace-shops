@@ -55,7 +55,8 @@ BUYER_KINDS: tuple[str, ...] = BuyerKind.__args__
 
 # The public ledger. sale: a payment credited. fee: the platform's share,
 # sent to its account. payout: a payee's share. refund: money sent back.
-LedgerKind = Literal["sale", "fee", "payout", "refund"]
+# purchase: the shop paying another shop's invoice from its own wallet.
+LedgerKind = Literal["sale", "fee", "payout", "refund", "purchase"]
 LEDGER_KINDS: tuple[str, ...] = LedgerKind.__args__
 LedgerStatus = Literal["pending", "done", "failed"]
 LEDGER_STATUSES: tuple[str, ...] = LedgerStatus.__args__

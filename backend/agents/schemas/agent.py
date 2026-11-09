@@ -65,3 +65,48 @@ class OfferDraft(BaseModel):
     floor_cents: int
     delivery: OfferDelivery
     delivery_note: str
+
+
+class MarketOffer(BaseModel):
+    id: UUID
+    title: str
+    price_usd: str
+    kind: OfferKind
+
+
+class MarketShop(BaseModel):
+    """Another live shop, as a possible supplier."""
+    slug: str
+    name: str
+    tagline: str
+    # The owner allowed this shop to pay it (a destination in the signed policy).
+    allowed_supplier: bool
+    offers: list[MarketOffer]
+
+
+class Purchase(BaseModel):
+    invoice_number: str
+    supplier: str
+    item: str
+    quantity: int
+    total_usd: str
+    status: str
+
+
+class GroupOrderView(BaseModel):
+    group_order_id: str
+    shop: str
+    offer: str
+    committed_quantity: int
+    unit_price_usd: str
+    next_tier_quantity: int | None
+    next_tier_price_usd: str | None
+    deadline: str
+
+
+class SalesSummary(BaseModel):
+    invoices_paid: int
+    revenue_usd: str
+    invoices_awaiting_payment: int
+    open_negotiations: int
+    open_group_orders: int

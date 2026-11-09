@@ -48,3 +48,10 @@ class ShopOut(BaseModel):
     def of(cls, shop) -> "ShopOut":
         return cls.model_validate({**shop.__dict__, "frozen": shop.frozen_at is not None,
                                    "wallet_open": shop.agent_id is not None})
+
+
+class SupplierOut(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    wallet_account_id: str | None

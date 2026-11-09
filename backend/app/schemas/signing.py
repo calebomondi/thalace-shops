@@ -1,9 +1,12 @@
+import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from agents.schemas.shop import ShopIntentStatus, ShopIntentType
+from app.schemas.rules import PayeeIn
 from app.schemas.shops import ShopOut
 
 
@@ -41,3 +44,14 @@ class SignatureStatusOut(BaseModel):
     status: ShopIntentStatus
     failure_code: str | None
     shop: ShopOut
+
+
+class FreezeIn(BaseModel):
+    freeze: bool
+
+
+class RulesChangeIn(BaseModel):
+    """The complete new rules for a live shop's wallet."""
+    payees: list[PayeeIn]
+    daily_budget_usd: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    supplier_shop_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)

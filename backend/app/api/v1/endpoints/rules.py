@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession, OwnedShop
 from app.schemas.rules import BudgetIn, PayeeOut, PayeesIn, PlatformTermsOut
-from app.schemas.shops import ShopOut
+from app.schemas.shops import ShopOut, SupplierOut
 from app.services import platform as platform_service
 from app.services import rules as rule_service
 
@@ -28,3 +28,10 @@ async def replace_payees(body: PayeesIn, shop: OwnedShop, db: DbSession) -> list
 @router.put("/shops/{shop_id}/budget", response_model=ShopOut)
 async def set_budget(body: BudgetIn, shop: OwnedShop, db: DbSession) -> ShopOut:
     return ShopOut.of(await rule_service.set_daily_budget(db, shop, body.daily_budget_usd))
+
+
+@router.get("/shops/{shop_id}/suppliers", response_model=list[SupplierOut])
+async def list_suppliers(shop: OwnedShop, db: DbSession) -> list[SupplierOut]:
+    """The shops this shop may buy from, as its signed policy allows."""
+    return [SupplierOut(id=s.id, slug=s.slug, name=s.name, wallet_account_id=s.wallet_account_id)
+            for s in await rule_service.list_suppliers(db, shop)]

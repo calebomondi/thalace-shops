@@ -94,3 +94,15 @@ async def update_shop(db: AsyncSession, shop: Shop, *, name: str | None, tagline
     await db.commit()
     await db.refresh(shop)
     return shop
+
+
+async def set_selling(db: AsyncSession, shop: Shop, selling: bool) -> Shop:
+    """Pause or resume selling: instant, and ours. A paused shop issues no new
+    invoices and takes no new payments; its wallet is untouched (freezing
+    that needs the owner's signature)."""
+    if shop.status == "draft":
+        raise ConflictError("A draft shop isn't selling yet.")
+    shop.status = "live" if selling else "paused"
+    await db.commit()
+    await db.refresh(shop)
+    return shop

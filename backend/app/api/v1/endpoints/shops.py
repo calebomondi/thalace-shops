@@ -33,3 +33,14 @@ async def update_shop(body: ShopUpdate, shop: OwnedShop, db: DbSession) -> ShopO
         db, shop, name=fields.get("name"), tagline=fields.get("tagline"), description=fields.get("description"),
         website=(str(website) if website else "") if "website" in fields else None)
     return ShopOut.of(shop)
+
+
+@router.post("/{shop_id}/pause", response_model=ShopOut)
+async def pause(shop: OwnedShop, db: DbSession) -> ShopOut:
+    """Stop selling now: no new invoices or payments. The wallet is untouched."""
+    return ShopOut.of(await shop_service.set_selling(db, shop, False))
+
+
+@router.post("/{shop_id}/resume", response_model=ShopOut)
+async def resume(shop: OwnedShop, db: DbSession) -> ShopOut:
+    return ShopOut.of(await shop_service.set_selling(db, shop, True))
