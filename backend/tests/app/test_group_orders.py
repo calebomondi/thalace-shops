@@ -100,10 +100,10 @@ def test_the_price_drops_as_members_join_and_locks_at_the_close(client, shop):
     closed = client.get(f"/api/v1/public/group-orders/{group_id}").json()
     assert (closed["status"], closed["unit_price_cents"]) == ("closed", 600)
     with psycopg.connect(settings.database_url) as conn:
-        invoiced = conn.execute("SELECT buyer_name, quantity, unit_price_cents, total_cents FROM invoices"
-                                " ORDER BY number").fetchall()
-    assert invoiced == [("Event planner", 3, 600, 1800), ("Wanjiru school", 4, 600, 2400),
-                        ("Kamau club", 5, 600, 3000)]
+        invoiced = conn.execute("SELECT buyer_name, quantity, unit_price_cents, total_cents FROM invoices").fetchall()
+    # One invoice each, all at the locked price; their order isn't a rule.
+    assert sorted(invoiced) == [("Event planner", 3, 600, 1800), ("Kamau club", 5, 600, 3000),
+                                ("Wanjiru school", 4, 600, 2400)]
     # Each member finds their own invoice by their member token.
     member = client.get(f"/api/v1/public/memberships/{opened['member_token']}").json()
     assert member["invoice_token"] and client.get(f"/api/v1/public/invoices/{member['invoice_token']}").json()[

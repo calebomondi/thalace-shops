@@ -61,7 +61,8 @@ def call(client, tool: str, **args):
 def test_the_mcp_server_lists_its_tools(client):
     response = client.post("/mcp", headers=MCP_HEADERS, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     names = {t["name"] for t in response.json()["result"]["tools"]}
-    assert names == {"search_shops", "get_shop", "negotiate", "respond_to_counter", "place_order", "invoice_status"}
+    assert names == {"search_shops", "get_shop", "negotiate", "respond_to_counter", "place_order", "invoice_status",
+                     "list_group_orders", "open_group_order", "join_group_order", "group_order_status", "pay_invoice"}
 
 
 def test_an_agent_finds_a_shop_without_seeing_its_floor(client, shop):
