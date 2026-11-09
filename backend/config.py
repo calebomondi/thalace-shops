@@ -119,6 +119,15 @@ class Settings(BaseSettings):
     # The highest daily cap an owner may sign: keeps a mistyped cap from
     # letting a shop move far more than a small business would.
     max_daily_budget_usd: int = 1000
+    # -- Shop agent --
+    # Per owner turn: tool calls before the agent must answer, the
+    # conversation re-sent each step, and the turn's wall clock.
+    agent_max_tool_calls_per_turn: int = 12
+    agent_history_token_budget: int = 16_000
+    agent_turn_timeout_s: float = 180.0
+    max_agent_turns_per_day: int = 100
+    # Characters of one web page the agent reads.
+    website_read_max_chars: int = 30_000
     # How long a verified Supabase access token is trusted before asking again.
     auth_cache_ttl_s: float = 60.0
     supabase_timeout_s: float = 10.0

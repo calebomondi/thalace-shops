@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from agents.schemas.shop import (
     FULL_SHARE_BPS,
+    MESSAGE_ROLES,
     OFFER_DELIVERIES,
     OFFER_KINDS,
     OFFER_STATUSES,
@@ -201,3 +202,29 @@ class AdminAuditLog(Base):
     after: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = _created()
 
+
+
+class ShopMessage(Base):
+    """One message in the owner's conversation with a shop's agent, kept so a
+    turn can pick up where the last one ended. Tool calls and results are
+    stored as the model saw them."""
+
+    __tablename__ = "shop_messages"
+    __table_args__ = (
+        CheckConstraint(_one_of("role", MESSAGE_ROLES), name="role"),
+        CheckConstraint("role <> 'tool' OR tool_call_id IS NOT NULL", name="tool_has_call_id"),
+        Index("ix_shop_messages_shop_id_created_at", "shop_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the created_at index, which leads with it.
+    shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String(10), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Opaque: the model's tool calls, replayed as they were. Nothing filters on them.
+    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tool_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Supabase owns users: no FK. Set on the owner's own messages.
+    author_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = _created()

@@ -31,3 +31,7 @@ PAYEE_ROUTES: tuple[str, ...] = PayeeRoute.__args__
 FULL_SHARE_BPS = 10_000
 SHOP_SLUG_PATTERN = "^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])$"
 SHOP_SLUG_MAX_LEN = 48
+
+# Who wrote a message in the owner's conversation with the shop's agent.
+MessageRole = Literal["user", "assistant", "tool"]
+MESSAGE_ROLES: tuple[str, ...] = MessageRole.__args__

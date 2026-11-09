@@ -10,6 +10,7 @@ from app.services.errors import (
     NotFoundError,
     RateLimitedError,
     ServiceError,
+    UnavailableError,
 )
 from config import settings
 
@@ -19,6 +20,7 @@ _STATUS: dict[type[ServiceError], int] = {
     ForbiddenError: 403,
     InvalidInputError: 422,
     RateLimitedError: 429,
+    UnavailableError: 503,
 }
 
 

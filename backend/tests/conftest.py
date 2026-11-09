@@ -17,7 +17,7 @@ from sqlalchemy.pool import NullPool
 
 from app.api.deps import require_user
 from app.database import models  # noqa: F401 -- registers every table on Base.metadata
-from app.database.connect import Base, get_db
+from app.database.connect import AsyncSessionLocal, Base, get_db
 from app.main import create_app
 from app.supabase_auth import AuthUser
 from config import settings
@@ -41,6 +41,9 @@ def migrated_database():
     """The test database at the Alembic head, through the same migrations production runs."""
     _create_database_if_missing()
     command.upgrade(AlembicConfig(str(_ALEMBIC_INI)), "head")
+    # Code that opens its own sessions (the shop agent's store) runs on the
+    # test client's event loop: pooled async connections must not cross loops.
+    AsyncSessionLocal.configure(bind=create_async_engine(settings.sqlalchemy_database_url, poolclass=NullPool))
 
 
 @pytest.fixture(autouse=True)

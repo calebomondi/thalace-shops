@@ -23,6 +23,11 @@ class InvalidInputError(ServiceError):
     """Input passed schema validation but breaks a business rule."""
 
 
+class UnavailableError(ServiceError):
+    """Something the request depends on (a model, an outside API) can't
+    answer right now. Worth trying again later."""
+
+
 class RateLimitedError(ServiceError):
     """The user hit a usage limit. `retry_after_s`, when known, becomes the
     Retry-After header."""
