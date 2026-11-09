@@ -82,3 +82,12 @@ export const payInvoice = (token: string, payAsset: string) =>
   apiFetch<PublicInvoice>(`/public/invoices/${token}/pay`, { method: 'POST', body: JSON.stringify({ pay_asset: payAsset }) })
 
 export const getPublicLedger = (slug: string) => apiFetch<LedgerLine[]>(`/public/shops/${slug}/ledger`)
+
+export type DirectoryShop = {
+  slug: string
+  name: string
+  tagline: string
+  offers: { id: string; title: string; price_cents: number; kind: string }[]
+}
+
+export const searchDirectory = (q: string) => apiFetch<DirectoryShop[]>(`/public/directory?q=${encodeURIComponent(q)}`)

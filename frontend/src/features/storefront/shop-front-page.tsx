@@ -1,6 +1,7 @@
 import { useCallback, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
+import { AgentConnect } from '../../components/agent-connect'
 import { Button, ErrorNote, Field, Input } from '../../components/ui'
 import { getPublicShop, issueInvoice, type PublicOffer, type PublicShop } from '../../lib/api/public'
 import { formatUsd } from '../../lib/money'
@@ -115,10 +116,14 @@ export function ShopFrontPage() {
               ))}
             </ul>
           )}
+          {state.data.selling && <AgentConnect compact />}
           <footer className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-4 text-xs text-muted">
             <span>Payments settle to the shop’s own wallet on NEAR Intents.</span>
             <Link to={`/s/${state.data.slug}/ledger`} className="underline">
               Public ledger
+            </Link>
+            <Link to="/directory" className="underline">
+              More shops
             </Link>
           </footer>
         </div>

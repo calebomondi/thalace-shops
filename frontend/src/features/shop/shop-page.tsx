@@ -6,6 +6,7 @@ import { getShop, type Shop } from '../../lib/api/shops'
 import { useLoad } from '../../lib/use-load'
 import { AgentChat } from './agent-chat'
 import { GoLivePanel } from './go-live-panel'
+import { NegotiationsPanel } from './negotiations-panel'
 import { OffersPanel } from './offers-panel'
 import { RulesPanel } from './rules-panel'
 import { SalesPanel } from './sales-panel'
@@ -32,6 +33,7 @@ function ShopView({ shop, onShopChange }: { shop: Shop; onShopChange: (s: Shop) 
       <div className="grid gap-6 lg:grid-cols-[1fr_26rem]">
         <div className="min-w-0 space-y-6">
           <SalesPanel shop={shop} />
+          {shop.status !== 'draft' && <NegotiationsPanel shopId={shop.id} />}
           <OffersPanel key={offersVersion} shopId={shop.id} />
           <RulesPanel shop={shop} onShopChange={onShopChange} />
           <GoLivePanel shop={shop} onShop={onShopChange} />

@@ -12,6 +12,9 @@ export function AppShell() {
             Thalace <span className="text-accent">Shops</span>
           </Link>
           <div className="flex min-w-0 items-center gap-3 text-sm">
+            <Link to="/directory" className="shrink-0 text-muted underline hover:text-ink">
+              Directory
+            </Link>
             <span className="truncate text-muted">{session?.user.email}</span>
             <button className="shrink-0 text-muted underline hover:text-ink" onClick={signOut}>
               Sign out
