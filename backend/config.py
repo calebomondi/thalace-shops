@@ -17,6 +17,8 @@ from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _ROOT = Path(__file__).resolve().parent
+# Qwen (DashScope) models tried in order when NEAR AI Cloud can't answer.
+_QWEN_MODELS = ("qwen-plus-2025-04-28", "qwen-plus-2025-07-14", "qwen-plus-latest", "qwen-max")
 
 
 class Settings(BaseSettings):
@@ -61,8 +63,8 @@ class Settings(BaseSettings):
     openai_api_key: str = Field("", validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPENAI_API_KEY"))
     # Qwen models, tried in order (comma-separated in env). `llm_models` serves
     # reasoning calls; `llm_cheap_models` the bulk extraction/condensing calls.
-    llm_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["qwen-plus-2025-04-28", "qwen-plus-2025-07-14", "qwen-plus-latest", "qwen-max"])
-    llm_cheap_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["qwen-plus-2025-04-28", "qwen-plus-2025-07-14", "qwen-plus-latest", "qwen-max"])
+    llm_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(_QWEN_MODELS))
+    llm_cheap_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(_QWEN_MODELS))
     # Second provider (OpenRouter), tried in order when every Qwen model fails.
     llm_fallback_models: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["openai/gpt-4o-mini"])
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -99,7 +101,22 @@ class Settings(BaseSettings):
     platform_fee_bps: int = 200
     platform_fee_max_bps: int = 1000
     near_intents_agent_api_url: str = "https://api.demo.agentsonintents.com"
+    near_intents_timeout_s: float = 30.0
     near_ai_cloud_base_url: str = "https://cloud-api.near.ai/v1"
+    # NEAR AI Cloud models for agent steps, tried in order before Qwen. Each
+    # was checked to call tools (2026-11-09); qwen/qwen3.7-max answered 502.
+    near_ai_models: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["z-ai/glm-5.3", "Qwen/Qwen3.8-27B", "deepseek/deepseek-v4.1-flash"])
+
+    # -- Shops --
+    # Native USDC on NEAR: what a sale is credited as unless the owner picks
+    # another asset (asset ids from the Agent API's GET /v1/tokens).
+    default_settlement_asset: str = "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"
+    default_daily_budget_usd: int = 20
+    max_shops_per_owner: int = 10
+    # How long a verified Supabase access token is trusted before asking again.
+    auth_cache_ttl_s: float = 60.0
+    supabase_timeout_s: float = 10.0
 
     # -- KRA (Kenya Revenue Authority) API credentials, one pair per product --
     kra_taxpayer_obligations_cons_key: str = ""
@@ -137,7 +154,8 @@ class Settings(BaseSettings):
             raise ValueError("at least one model is required")
         return value
 
-    @field_validator("allowed_origins", "admin_bootstrap_emails", "llm_models", "llm_cheap_models", "llm_fallback_models", mode="before")
+    @field_validator("allowed_origins", "admin_bootstrap_emails", "llm_models", "llm_cheap_models",
+                     "llm_fallback_models", "near_ai_models", mode="before")
     @classmethod
     def _parse_str_list(cls, value):
         """Accept a comma-separated string or a JSON array from the env."""

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Dev backend runner: uvicorn with reload, run from backend/ so `config`,
+# Dev backend runner: starts Postgres, applies migrations, then uvicorn with reload, run from backend/ so `config`,
 # `app`, `agents` and `utils` import as top-level packages.
 #
 # The explicit --reload-dir list keeps the watcher on Python source only, so
@@ -13,6 +13,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 docker compose up -d --wait postgres
+uv run alembic upgrade head
 
 exec uv run uvicorn app.main:app \
   --reload \
@@ -20,4 +21,5 @@ exec uv run uvicorn app.main:app \
   --port 8000 \
   --reload-dir app \
   --reload-dir agents \
-  --reload-dir utils
+  --reload-dir utils \
+  --reload-dir data_sources

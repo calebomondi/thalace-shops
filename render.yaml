@@ -24,7 +24,8 @@ services:
       export UV_PYTHON_INSTALL_DIR="$PWD/.python" UV_PYTHON_PREFERENCE=only-managed &&
       pip install uv==0.11.21 &&
       uv sync --frozen --no-dev
-    # Day 1 adds migrations here: .venv/bin/alembic upgrade head
+    # Migrations run before the new version starts; a failed one stops the deploy.
+    preDeployCommand: .venv/bin/alembic upgrade head
     startCommand: .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     buildFilter:
