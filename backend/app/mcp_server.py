@@ -14,9 +14,10 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 
+from app.api.v1.group_views import group_out
 from app.database.connect import AsyncSessionLocal
 from app.database.models import Invoice, Negotiation, NegotiationMoveRow, Offer, Shop
-from app.services import directory, invoices, negotiation
+from app.services import directory, group_orders, invoices, negotiation
 from app.services.errors import ServiceError
 from config import settings
 
@@ -26,7 +27,11 @@ services for dollar stablecoins on any chain, settled through NEAR Intents.
 To buy: search_shops -> get_shop -> (optionally) negotiate a unit price, then respond_to_counter ->
 place_order, which returns an invoice and a one-time payment address for the exact amount ->
 send it -> invoice_status until paid. Prices are in US dollars per unit. A shop's agent may accept,
-counter or walk away; it never goes below the shop's own minimum, which is not disclosed."""
+counter or walk away; it never goes below the shop's own minimum, which is not disclosed.
+
+To buy together for a volume price: list_group_orders, then join_group_order (or open_group_order on
+an offer that takes group orders). At the deadline the price locks at the tier the total reached and
+each member gets their own invoice: group_order_status with your member_token, then pay_invoice."""
 
 mcp = MCPServer(name="Thalace Shops", instructions=INSTRUCTIONS, website_url=settings.frontend_base_url)
 
@@ -197,6 +202,80 @@ async def invoice_status(invoice_token: str) -> dict:
         try:
             invoice = await invoices.invoice_by_token(db, invoice_token)
             await invoices.check_invoice(db, invoice)
+            return _invoice(await invoices.view(db, invoice))
+        except ServiceError as exc:
+            raise ToolError(str(exc)) from None
+
+
+def _membership(view: group_orders.GroupView, member_token: str, invoice: Invoice | None) -> dict:
+    out = group_out(view).model_dump(mode="json", exclude={"members"})
+    return {**out, "member_token": member_token, "members": len(view.members),
+            "invoice_token": invoice.public_token if invoice else None,
+            "next": "pay_invoice with invoice_token" if invoice else
+            "wait for the deadline; then group_order_status with member_token for your invoice"}
+
+
+@mcp.tool()
+async def list_group_orders() -> list[dict]:
+    """Open group orders: what's being bought together, the committed quantity,
+    the price now, the next tier and the deadline."""
+    async with AsyncSessionLocal() as db:
+        views = await group_orders.market(db)
+    return [group_out(v).model_dump(mode="json", exclude={"members"}) | {"members": len(v.members)}
+            for v in views if v.group.status == "open"]
+
+
+@mcp.tool()
+async def open_group_order(offer_id: str, quantity: int, hours: float, buyer_name: str = "A buyer agent",
+                           buyer_email: str | None = None) -> dict:
+    """Open a group order on an offer that takes them, committing `quantity`
+    units, closing in `hours`. Keep the returned member_token."""
+    async with AsyncSessionLocal() as db:
+        try:
+            group, member = await group_orders.open_group_order(
+                db, offer_id=_uuid(offer_id, "offer_id"), quantity=quantity, hours=hours, buyer_kind="agent",
+                buyer_name=buyer_name, buyer_email=buyer_email)
+            return _membership(await group_orders.view(db, group), member.public_token, None)
+        except ServiceError as exc:
+            raise ToolError(str(exc)) from None
+
+
+@mcp.tool()
+async def join_group_order(group_order_id: str, quantity: int, buyer_name: str = "A buyer agent",
+                           buyer_email: str | None = None) -> dict:
+    """Join an open group order with `quantity` units. Keep the returned member_token."""
+    async with AsyncSessionLocal() as db:
+        try:
+            member = await group_orders.join(db, group_order_id, quantity=quantity, buyer_kind="agent",
+                                             buyer_name=buyer_name, buyer_email=buyer_email)
+            group = await group_orders.by_token(db, group_order_id)
+            return _membership(await group_orders.view(db, group), member.public_token, None)
+        except ServiceError as exc:
+            raise ToolError(str(exc)) from None
+
+
+@mcp.tool()
+async def group_order_status(member_token: str) -> dict:
+    """Your place in a group order: the committed total and price now, and
+    once it closed, your invoice_token to pay."""
+    async with AsyncSessionLocal() as db:
+        try:
+            member, group = await group_orders.member_by_token(db, member_token)
+            invoice = await db.get(Invoice, member.invoice_id) if member.invoice_id else None
+            return _membership(await group_orders.view(db, group), member.public_token, invoice)
+        except ServiceError as exc:
+            raise ToolError(str(exc)) from None
+
+
+@mcp.tool()
+async def pay_invoice(invoice_token: str, pay_with: str) -> dict:
+    """Get the one-time payment address for an invoice you hold (from a group
+    order, or one whose quote expired). pay_with e.g. "USDC on base"."""
+    asset = await _coin(pay_with)
+    async with AsyncSessionLocal() as db:
+        try:
+            invoice = await invoices.invoice_by_token(db, invoice_token)
+            invoice = await invoices.quote_payment(db, invoice, asset)
             return _invoice(await invoices.view(db, invoice))
         except ServiceError as exc:
             raise ToolError(str(exc)) from None

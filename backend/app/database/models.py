@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import (
     UUID,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -30,6 +31,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from agents.schemas.shop import (
     BUYER_KINDS,
     FULL_SHARE_BPS,
+    GROUP_ORDER_STATUSES,
     INVOICE_STATUSES,
     LEDGER_KINDS,
     LEDGER_STATUSES,
@@ -173,6 +175,11 @@ class Offer(Base):
     delivery_note: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     status: Mapped[str] = mapped_column(String(8), nullable=False, default="draft", server_default="draft")
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Group buying (docs/RULES.md): the seller turns it on and sets tiers
+    # (offer_tiers) and the longest window a group order may stay open.
+    group_buy_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                                    server_default=text("false"))
+    group_window_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=72, server_default="72")
     # Supabase owns users: no FK. None for an offer the agent drafted.
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = _created()
@@ -464,4 +471,77 @@ class NegotiationMoveRow(Base):
     unit_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # The side's own words: the buyer's message, or the seller agent's reason.
     message: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[datetime] = _created()
+
+
+class OfferTier(Base):
+    """A volume step for group orders: from `min_quantity` units, this unit
+    price. Never below the offer's floor (checked when tiers are set)."""
+
+    __tablename__ = "offer_tiers"
+    __table_args__ = (
+        CheckConstraint("min_quantity > 0 AND unit_price_cents > 0", name="positive"),
+        UniqueConstraint("offer_id", "min_quantity", name="uq_offer_tiers_offer_id_min_quantity"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the unique constraint, which leads with it.
+    offer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), nullable=False)
+    min_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class GroupOrder(Base):
+    """Buyers pooling demand for one offer until a deadline (docs/RULES.md)."""
+
+    __tablename__ = "group_orders"
+    __table_args__ = (
+        CheckConstraint(_one_of("status", GROUP_ORDER_STATUSES), name="status"),
+        CheckConstraint("status <> 'closed' OR (unit_price_cents IS NOT NULL AND total_quantity > 0)",
+                        name="closed_has_price"),
+        # One open group order per offer.
+        Index("uq_group_orders_open_offer", "offer_id", unique=True, postgresql_where=text("status = 'open'")),
+        Index("ix_group_orders_open_deadline", "deadline", postgresql_where=text("status = 'open'")),
+        Index("ix_group_orders_shop_id_created_at", "shop_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the created_at index, which leads with it.
+    shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    offer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), nullable=False,
+                                                index=True)
+    public_token: Mapped[str] = mapped_column(String(48), nullable=False, unique=True)
+    # How the opener named itself: data, never instructions.
+    opened_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default="open", server_default="open")
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Locked at close: the tier reached by the total committed quantity.
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = _created()
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GroupOrderMember(Base):
+    """One buyer in a group order, with their own invoice once it closes."""
+
+    __tablename__ = "group_order_members"
+    __table_args__ = (
+        CheckConstraint(_one_of("buyer_kind", BUYER_KINDS), name="buyer_kind"),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        Index("ix_group_order_members_group_order_id_created_at", "group_order_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the created_at index, which leads with it.
+    group_order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("group_orders.id", ondelete="CASCADE"),
+                                                      nullable=False)
+    # The member's own handle: their invoice is found by it after the close.
+    public_token: Mapped[str] = mapped_column(String(48), nullable=False, unique=True)
+    buyer_kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    buyer_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    buyer_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id", ondelete="SET NULL"),
+                                                         nullable=True, index=True)
     created_at: Mapped[datetime] = _created()

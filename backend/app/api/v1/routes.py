@@ -1,6 +1,17 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import chat, invoices, me, negotiations, offers, public, rules, shops, signing
+from app.api.v1.endpoints import (
+    chat,
+    group_orders,
+    invoices,
+    me,
+    negotiations,
+    offers,
+    public,
+    rules,
+    shops,
+    signing,
+)
 from app.api.v1.endpoints.admin import platform as admin_platform
 from config import settings
 
@@ -21,4 +32,6 @@ api_router.include_router(signing.router)
 api_router.include_router(invoices.router)
 api_router.include_router(negotiations.router)
 api_router.include_router(public.router)
+api_router.include_router(group_orders.owner)
+api_router.include_router(group_orders.public)
 api_router.include_router(admin_platform.router)

@@ -71,3 +71,8 @@ NEGOTIATION_SIDES: tuple[str, ...] = NegotiationSide.__args__
 # take the other side's last price. walk_away: end without a deal.
 NegotiationMove = Literal["offer", "counter", "accept", "walk_away"]
 NEGOTIATION_MOVES: tuple[str, ...] = NegotiationMove.__args__
+
+# open: taking members until its deadline. closed: the price was locked at
+# the tier reached and each member was invoiced. cancelled: closed empty.
+GroupOrderStatus = Literal["open", "closed", "cancelled"]
+GROUP_ORDER_STATUSES: tuple[str, ...] = GroupOrderStatus.__args__

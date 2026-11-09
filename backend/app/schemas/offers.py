@@ -50,6 +50,7 @@ class OfferOut(BaseModel):
     status: OfferStatus
     # The shop's agent wrote it; the owner hasn't changed who made it.
     drafted_by_agent: bool
+    group_buy_enabled: bool
     created_at: datetime
 
     @classmethod

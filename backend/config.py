@@ -158,6 +158,10 @@ class Settings(BaseSettings):
     # -- Agents buying from shops --
     # Offers a buyer may make in one negotiation before it must accept or walk away.
     negotiation_max_offers: int = 3
+    # Group orders (docs/RULES.md).
+    group_order_max_window_hours: int = 72
+    group_order_min_minutes: int = 10
+    group_order_max_members: int = 100
     # Shops and offers one directory search returns at most.
     directory_limit: int = 20
 
