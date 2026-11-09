@@ -5,6 +5,7 @@ import { ErrorNote } from '../../components/ui'
 import { getShop, type Shop } from '../../lib/api/shops'
 import { useLoad } from '../../lib/use-load'
 import { AgentChat } from './agent-chat'
+import { GoLivePanel } from './go-live-panel'
 import { OffersPanel } from './offers-panel'
 import { RulesPanel } from './rules-panel'
 
@@ -31,6 +32,7 @@ function ShopView({ shop, onShopChange }: { shop: Shop; onShopChange: (s: Shop) 
         <div className="min-w-0 space-y-6">
           <OffersPanel key={offersVersion} shopId={shop.id} />
           <RulesPanel shop={shop} onShopChange={onShopChange} />
+          <GoLivePanel shop={shop} onShop={onShopChange} />
         </div>
         <div className="lg:sticky lg:top-6 lg:self-start">
           <AgentChat shopId={shop.id} onTurn={() => setOffersVersion((v) => v + 1)} />

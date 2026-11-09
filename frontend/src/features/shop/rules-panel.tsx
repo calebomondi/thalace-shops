@@ -140,7 +140,8 @@ export function RulesPanel({ shop, onShopChange }: { shop: Shop; onShopChange: (
     [shop.id],
   )
   const { state } = useLoad(fetcher)
-  const editable = shop.status === 'draft'
+  // Once the wallet exists its policy holds these rules, even before the shop is live.
+  const editable = shop.status === 'draft' && !shop.wallet_open
 
   return (
     <section className="space-y-4 rounded-2xl border border-line bg-card p-5">

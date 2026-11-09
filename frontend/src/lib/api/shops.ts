@@ -14,6 +14,8 @@ export type Shop = {
   settlement_asset: string
   daily_budget_usd: string
   wallet_account_id: string | null
+  owner_account_id: string | null
+  wallet_open: boolean
   frozen: boolean
   live_since: string | null
   created_at: string
