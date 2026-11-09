@@ -19,7 +19,7 @@ Migrations run before each `api` deploy (`preDeployCommand: alembic upgrade head
 2. Make two services from the same repo. For each, in **Settings**:
    - **Source → Root directory**: `/backend` for `api`, `/frontend` for `app`.
    - **Config-as-code → Railway config file**: `/backend/railway.json` or `/frontend/railway.json`.
-   - **Source → Branch**: `dev` during the hackathon; `main` for the submission.
+   - **Source → Branch**: `main`. Work happens on `dev` and reaches `main` through a PR, so every deploy is reviewed.
 3. Rename them `api` and `app` (the variables below refer to `api` by name).
 
 ## 2. Variables
