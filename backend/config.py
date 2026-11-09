@@ -155,6 +155,12 @@ class Settings(BaseSettings):
     # An invoice page asks the Agent API itself when the watcher hasn't for this long.
     invoice_recheck_s: float = 5.0
 
+    # -- Agents buying from shops --
+    # Offers a buyer may make in one negotiation before it must accept or walk away.
+    negotiation_max_offers: int = 3
+    # Shops and offers one directory search returns at most.
+    directory_limit: int = 20
+
     # -- Shop agent --
     # Per owner turn: tool calls before the agent must answer, the
     # conversation re-sent each step, and the turn's wall clock.

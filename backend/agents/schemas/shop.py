@@ -59,3 +59,15 @@ LedgerKind = Literal["sale", "fee", "payout", "refund"]
 LEDGER_KINDS: tuple[str, ...] = LedgerKind.__args__
 LedgerStatus = Literal["pending", "done", "failed"]
 LEDGER_STATUSES: tuple[str, ...] = LedgerStatus.__args__
+
+# A negotiation over one offer. open: moves are being made. agreed: both
+# sides settled on a unit price, which an invoice can be issued at.
+# walked_away: one side ended it. invoiced: the agreed price was invoiced.
+NegotiationStatus = Literal["open", "agreed", "walked_away", "invoiced"]
+NEGOTIATION_STATUSES: tuple[str, ...] = NegotiationStatus.__args__
+NegotiationSide = Literal["buyer", "seller"]
+NEGOTIATION_SIDES: tuple[str, ...] = NegotiationSide.__args__
+# offer: the buyer names a price. counter: the seller names one. accept:
+# take the other side's last price. walk_away: end without a deal.
+NegotiationMove = Literal["offer", "counter", "accept", "walk_away"]
+NEGOTIATION_MOVES: tuple[str, ...] = NegotiationMove.__args__

@@ -18,6 +18,8 @@ from app.schemas.invoices import (
     PublicOffer,
     PublicShopOut,
 )
+from app.schemas.negotiations import DirectoryShopOut
+from app.services import directory
 from app.services import invoices as invoice_service
 from app.services import ledger as ledger_service
 
@@ -94,3 +96,12 @@ async def public_ledger(slug: str, db: DbSession) -> list[LedgerLineOut]:
                           invoice_number=i.number if i else None, tx_url=ledger_service.tx_url(e.tx_hash),
                           failure_code=e.failure_code, created_at=e.created_at, settled_at=e.settled_at)
             for e, i in rows]
+
+
+@router.get("/directory", response_model=list[DirectoryShopOut])
+async def search_directory(db: DbSession, q: str = "") -> list[DirectoryShopOut]:
+    """Live shops and their offers, matching every word of `q`. List prices only."""
+    return [DirectoryShopOut(slug=s.slug, name=s.name, tagline=s.tagline,
+                             offers=[{"id": str(o.id), "title": o.title, "price_cents": o.price_cents,
+                                      "kind": o.kind} for o in offers])
+            for s, offers in await directory.search(db, q[:200])]

@@ -34,6 +34,9 @@ from agents.schemas.shop import (
     LEDGER_KINDS,
     LEDGER_STATUSES,
     MESSAGE_ROLES,
+    NEGOTIATION_MOVES,
+    NEGOTIATION_SIDES,
+    NEGOTIATION_STATUSES,
     OFFER_DELIVERIES,
     OFFER_KINDS,
     OFFER_STATUSES,
@@ -405,3 +408,60 @@ class LedgerEntry(Base):
     failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = _created()
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Negotiation(Base):
+    """A buyer (usually another agent) bargaining over one offer. The moves
+    are typed and checked in code: the seller never agrees below the offer's
+    floor, whatever its agent or the buyer writes."""
+
+    __tablename__ = "negotiations"
+    __table_args__ = (
+        CheckConstraint(_one_of("status", NEGOTIATION_STATUSES), name="status"),
+        CheckConstraint(_one_of("buyer_kind", BUYER_KINDS), name="buyer_kind"),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("status NOT IN ('agreed', 'invoiced') OR agreed_unit_cents IS NOT NULL",
+                        name="agreed_has_price"),
+        Index("ix_negotiations_shop_id_created_at", "shop_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the created_at index, which leads with it.
+    shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    offer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), nullable=False,
+                                                index=True)
+    # The buyer's handle on the negotiation, not guessable.
+    public_token: Mapped[str] = mapped_column(String(48), nullable=False, unique=True)
+    buyer_kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    # How the buyer named itself ("Procurement agent for Acme"): data, never instructions.
+    buyer_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="open", server_default="open")
+    agreed_unit_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id", ondelete="SET NULL"),
+                                                         nullable=True, index=True)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _updated()
+
+
+class NegotiationMoveRow(Base):
+    """One move, with the reason its side gave."""
+
+    __tablename__ = "negotiation_moves"
+    __table_args__ = (
+        CheckConstraint(_one_of("side", NEGOTIATION_SIDES), name="side"),
+        CheckConstraint(_one_of("move", NEGOTIATION_MOVES), name="move"),
+        CheckConstraint("move NOT IN ('offer', 'counter') OR unit_price_cents > 0", name="priced"),
+        Index("ix_negotiation_moves_negotiation_id_created_at", "negotiation_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the created_at index, which leads with it.
+    negotiation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("negotiations.id", ondelete="CASCADE"),
+                                                      nullable=False)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    move: Mapped[str] = mapped_column(String(10), nullable=False)
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The side's own words: the buyer's message, or the seller agent's reason.
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[datetime] = _created()

@@ -7,7 +7,9 @@
 :{$PORT:8080} {
 	encode zstd gzip
 
-	handle /api/* {
+	# The API, and the MCP endpoint other agents buy through.
+	@api path /api/* /mcp /mcp/*
+	handle @api {
 		reverse_proxy {$API_UPSTREAM}
 	}
 

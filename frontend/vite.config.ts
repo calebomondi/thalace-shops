@@ -16,6 +16,7 @@ export default defineConfig({
     // Same-origin API calls in dev: /api/* goes to the FastAPI backend.
     proxy: {
       '/api': 'http://localhost:8100',
+      '/mcp': 'http://localhost:8100',
     },
   },
 })

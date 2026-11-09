@@ -1,8 +1,10 @@
+import contextlib
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app import worker
+from app import mcp_server, worker
 from app.api.v1.routes import api_router
 from app.services.errors import (
     ConflictError,
@@ -40,12 +42,24 @@ def add_service_error_handlers(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=settings.project_name, lifespan=lambda _: worker.running())
+    mcp_routes, mcp_sessions = mcp_server.build_app()
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_: FastAPI):
+        # The MCP routes are added to this app rather than mounted with their
+        # own lifespan, so their session manager is started here, alongside
+        # the payment watcher.
+        async with mcp_sessions.run(), worker.running():
+            yield
+
+    app = FastAPI(title=settings.project_name, lifespan=lifespan)
     if settings.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True,
                            allow_methods=["*"], allow_headers=["*"])
     app.include_router(api_router, prefix=settings.api_v1_str)
     add_service_error_handlers(app)
+    # The MCP endpoint, as a route of this app so /mcp needs no redirect.
+    app.router.routes.extend(mcp_routes)
     return app
 
 
