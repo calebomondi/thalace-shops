@@ -114,6 +114,11 @@ class Settings(BaseSettings):
     default_settlement_asset: str = "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"
     default_daily_budget_usd: int = 20
     max_shops_per_owner: int = 10
+    max_offers_per_shop: int = 50
+    max_payees_per_shop: int = 10
+    # The highest daily cap an owner may sign: keeps a mistyped cap from
+    # letting a shop move far more than a small business would.
+    max_daily_budget_usd: int = 1000
     # How long a verified Supabase access token is trusted before asking again.
     auth_cache_ttl_s: float = 60.0
     supabase_timeout_s: float = 10.0

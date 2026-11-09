@@ -10,6 +10,9 @@ export default defineConfig({
     // Supabase redirect URLs list this port, so it must not drift.
     port: 5180,
     strictPort: true,
+    // Cloudflare quick tunnels (cloudflared tunnel --url http://localhost:5180)
+    // give an https:// address for testing passkeys; it changes on each start.
+    allowedHosts: ['.trycloudflare.com'],
     // Same-origin API calls in dev: /api/* goes to the FastAPI backend.
     proxy: {
       '/api': 'http://localhost:8100',
