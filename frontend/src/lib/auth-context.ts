@@ -3,10 +3,10 @@ import { createContext, useContext } from 'react'
 
 export type AuthState = {
   session: Session | null
-  // True until the stored session (or a ?code= in the URL) has been read.
-  loading: boolean
-  sendMagicLink: (email: string) => Promise<void>
-  signInWithGoogle: () => Promise<void>
+  /** Email a sign-in link that returns to `next` (a path in this app). */
+  sendMagicLink: (email: string, next: string | null) => Promise<void>
+  /** Leave for Google; the callback page brings the user back to `next`. */
+  signInWithGoogle: (next: string | null) => Promise<void>
   signOut: () => Promise<void>
 }
 
