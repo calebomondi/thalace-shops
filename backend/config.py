@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # ALLOWED_ORIGINS=http://localhost:5173,https://app.example.com
     allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     admin_bootstrap_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
-    frontend_base_url: str = "http://localhost:5173"
+    frontend_base_url: str = "http://localhost:5180"
 
     # -- Supabase --
     supabase_base_url: str = ""
@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     platform_fee_max_bps: int = 1000
     near_intents_agent_api_url: str = "https://api.demo.agentsonintents.com"
     near_intents_timeout_s: float = 30.0
+    # Encrypts each shop's grant token at rest (a Fernet key). Never change it:
+    # live shops couldn't pay out until their owners signed again.
+    shop_grant_key: str = ""
+    # How long the backend's grant on a shop's wallet lasts (the API allows 365).
+    shop_grant_days: int = 180
     near_ai_cloud_base_url: str = "https://cloud-api.near.ai/v1"
     # NEAR AI Cloud models for agent steps, tried in order before Qwen. Each
     # was checked to call tools (2026-11-09); qwen/qwen3.7-max answered 502.

@@ -35,3 +35,9 @@ SHOP_SLUG_MAX_LEN = 48
 # Who wrote a message in the owner's conversation with the shop's agent.
 MessageRole = Literal["user", "assistant", "tool"]
 MESSAGE_ROLES: tuple[str, ...] = MessageRole.__args__
+
+# What the owner's passkey signs for a shop, through the Agent API.
+ShopIntentType = Literal["agent_create", "grant_issue", "policy_update", "agent_freeze", "agent_unfreeze"]
+SHOP_INTENT_TYPES: tuple[str, ...] = ShopIntentType.__args__
+ShopIntentStatus = Literal["awaiting_signature", "submitted", "succeeded", "failed", "expired"]
+SHOP_INTENT_STATUSES: tuple[str, ...] = ShopIntentStatus.__args__

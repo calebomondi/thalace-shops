@@ -61,6 +61,9 @@ services:
         sync: false
       - key: NEAR_INTENTS_AGENT_API_KEY
         sync: false
+      # A Fernet key made once for production; never change it after shops go live.
+      - key: SHOP_GRANT_KEY
+        sync: false
       - key: NEAR_AI_CLOUD_API_KEY
         sync: false
       - key: DASHSCOPE_API_KEY

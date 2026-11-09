@@ -37,10 +37,14 @@ class ShopOut(BaseModel):
     settlement_asset: str
     daily_budget_usd: Decimal
     wallet_account_id: str | None
+    owner_account_id: str | None
+    # The first signature opened the wallet; its money rules are fixed now.
+    wallet_open: bool
     frozen: bool
     live_since: datetime | None
     created_at: datetime
 
     @classmethod
     def of(cls, shop) -> "ShopOut":
-        return cls.model_validate({**shop.__dict__, "frozen": shop.frozen_at is not None})
+        return cls.model_validate({**shop.__dict__, "frozen": shop.frozen_at is not None,
+                                   "wallet_open": shop.agent_id is not None})

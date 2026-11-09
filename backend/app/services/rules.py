@@ -22,8 +22,10 @@ _NEAR_ACCOUNT = r"^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$"
 
 
 def _draft_only(shop: Shop) -> None:
-    if shop.status != "draft":
-        raise ConflictError("This shop is live: changing its money rules needs a new signature from you.")
+    # Once the wallet exists (after the first signature), its policy holds
+    # these rules, even before the shop is fully live.
+    if shop.status != "draft" or shop.agent_id is not None:
+        raise ConflictError("This shop's wallet holds these rules now: changing them needs a new signature from you.")
 
 
 async def list_payees(db: AsyncSession, shop: Shop) -> list[Payee]:

@@ -33,6 +33,8 @@ from agents.schemas.shop import (
     OFFER_KINDS,
     OFFER_STATUSES,
     PAYEE_ROUTES,
+    SHOP_INTENT_STATUSES,
+    SHOP_INTENT_TYPES,
     SHOP_SLUG_MAX_LEN,
     SHOP_SLUG_PATTERN,
     SHOP_STATUSES,
@@ -62,6 +64,25 @@ def _created() -> Mapped[datetime]:
 def _updated() -> Mapped[datetime]:
     return mapped_column(DateTime(timezone=True), nullable=False, default=_now, server_default=func.now(),
                          onupdate=_now)
+
+
+class OwnerPasskey(Base):
+    """A founder's passkey on one site (its rp_id). Public data only: the
+    private key never leaves the founder's device. One passkey owns every shop
+    the founder takes live on that site, each with its own wallet."""
+
+    __tablename__ = "owner_passkeys"
+    __table_args__ = (UniqueConstraint("user_id", "rp_id", name="uq_owner_passkeys_user_id_rp_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Supabase owns users: no FK. Indexed by the unique constraint, which leads with it.
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    credential_id: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    # P-256 SPKI, base64url: what NEAR Intents checks each signature against.
+    public_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    rp_id: Mapped[str] = mapped_column(String(253), nullable=False)
+    origin: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = _created()
 
 
 class Shop(Base):
@@ -95,6 +116,17 @@ class Shop(Base):
     # Set when the owner signs the shop live.
     agent_id: Mapped[str | None] = mapped_column(String(API_ID_LEN), nullable=True, unique=True)
     wallet_account_id: Mapped[str | None] = mapped_column(String(ADDRESS_LEN), nullable=True)
+    # The passkey that signs for the shop's wallet; fixed once the wallet
+    # exists. Indexed for "which shops does this passkey own".
+    owner_passkey_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("owner_passkeys.id", ondelete="RESTRICT"), nullable=True, index=True)
+    # The NEAR account the Agent API derives from that passkey.
+    owner_account_id: Mapped[str | None] = mapped_column(String(ADDRESS_LEN), nullable=True)
+    policy_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The grant our backend acts under; its token encrypted, never shown or logged.
+    grant_id: Mapped[str | None] = mapped_column(String(API_ID_LEN), nullable=True)
+    grant_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    grant_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Set while the owner's wallet freeze is on: nothing can move money.
     frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     live_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -228,3 +260,32 @@ class ShopMessage(Base):
     # Supabase owns users: no FK. Set on the owner's own messages.
     author_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = _created()
+
+
+class ShopIntent(Base):
+    """An owner signature a shop is waiting on, generated for one person.
+    Only they may submit it: a correlation id from a browser is never trusted
+    on its own."""
+
+    __tablename__ = "shop_intents"
+    __table_args__ = (
+        CheckConstraint(_one_of("type", SHOP_INTENT_TYPES), name="type"),
+        CheckConstraint(_one_of("status", SHOP_INTENT_STATUSES), name="status"),
+        Index("ix_shop_intents_shop_id_created_at", "shop_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Indexed by the created_at index, which leads with it.
+    shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(API_ID_LEN), nullable=False, unique=True)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="awaiting_signature",
+                                        server_default="awaiting_signature")
+    # Supabase owns users: no FK.
+    requested_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    # A grant_issue's token, encrypted, until the grant is live on the shop.
+    grant_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = _created()
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
