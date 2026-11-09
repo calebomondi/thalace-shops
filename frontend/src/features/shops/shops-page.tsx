@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 
 import { Button, ErrorNote } from '../../components/ui'
 import type { Shop, ShopStatus } from '../../lib/api/shops'
@@ -14,13 +15,18 @@ const statusLabel: Record<ShopStatus, { text: string; style: string }> = {
 function ShopCard({ shop }: { shop: Shop }) {
   const status = statusLabel[shop.status]
   return (
-    <li className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-display text-lg leading-snug">{shop.name}</h3>
-        <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs ${status.style}`}>{status.text}</span>
-      </div>
-      {shop.tagline && <p className="text-sm text-muted">{shop.tagline}</p>}
-      <p className="mt-auto font-mono text-xs text-muted">/s/{shop.slug}</p>
+    <li>
+      <Link
+        to={`/shops/${shop.id}`}
+        className="flex h-full flex-col gap-3 rounded-2xl border border-line bg-card p-5 shadow-sm transition hover:border-accent/50"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-display text-lg leading-snug">{shop.name}</h3>
+          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs ${status.style}`}>{status.text}</span>
+        </div>
+        {shop.tagline && <p className="text-sm text-muted">{shop.tagline}</p>}
+        <p className="mt-auto font-mono text-xs text-muted">/s/{shop.slug}</p>
+      </Link>
     </li>
   )
 }

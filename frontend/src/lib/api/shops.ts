@@ -31,3 +31,5 @@ export const listShops = () => apiFetch<Shop[]>('/shops')
 
 export const createShop = (body: ShopCreate) =>
   apiFetch<Shop>('/shops', { method: 'POST', body: JSON.stringify(body) })
+
+export const getShop = (shopId: string) => apiFetch<Shop>(`/shops/${shopId}`)

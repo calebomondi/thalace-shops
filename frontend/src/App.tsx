@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppShell } from './components/app-shell'
 import { AuthCallbackPage } from './features/auth/auth-callback-page'
 import { SignInPage } from './features/auth/sign-in-page'
+import { ShopPage } from './features/shop/shop-page'
 import { ShopsPage } from './features/shops/shops-page'
 import { useAuth } from './lib/auth-context'
 import { HOME_PATH, safeNextPath } from './lib/next-path'
@@ -37,6 +38,7 @@ function App() {
       <Route path="/auth" element={<Navigate to="/auth/sign-in" replace />} />
       <Route element={<RequireSession />}>
         <Route index element={<ShopsPage />} />
+        <Route path="shops/:shopId" element={<ShopPage />} />
       </Route>
       <Route path="*" element={<Navigate to={HOME_PATH} replace />} />
     </Routes>
