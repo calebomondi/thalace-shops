@@ -1,6 +1,6 @@
 name: thalace-shops
 
-# Local Postgres for development. Production uses Supabase (render.yaml).
+# Local Postgres for development. Production uses Supabase (docs/deploy-railway.md).
 # Port 5433 on the host, so it runs beside other projects' Postgres on 5432.
 services:
   postgres:

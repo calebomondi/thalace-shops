@@ -32,6 +32,10 @@ bun install
 bun run dev
 ```
 
+## Deploy
+
+Railway: `backend/railway.json`, `frontend/railway.json`; steps in `docs/deploy-railway.md`.
+
 ## Baseline code and disclosures
 
 - `backend/agents/llm/` and `backend/config.py` are adapted from the team's pre-hackathon product, Thalace. They count as baseline (HACKATHON.md Q-002, Q-005), and only the NEAR integration built during the hackathon is judged.

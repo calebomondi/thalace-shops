@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # -- App --
     project_name: str = "Thalace Shops"
     api_v1_str: str = "/api/v1"
+    # The port serve.py listens on; Railway sets PORT.
+    port: int = 8000
     environment: str = "development"
     log_level: str = "INFO"
     # "text" for a terminal, "json" (one object per line) for a log shipper.
@@ -49,7 +51,7 @@ class Settings(BaseSettings):
     # -- Database --
     # Postgres everywhere. Local dev: the docker-compose.yml service on 5433
     # (DATABASE_URL in .env). Production: Supabase's transaction pooler
-    # (port 6543), set as DATABASE_URL on Render. Only DATABASE_URL is read,
+    # (port 6543), set as DATABASE_URL on Railway. Only DATABASE_URL is read,
     # never SUPABASE_DB_CONN_STR, so local dev can't reach production by
     # falling back to it.
     database_url: str = "postgresql://thalace:thalace@localhost:5433/thalace"
@@ -140,8 +142,9 @@ class Settings(BaseSettings):
     tokens_cache_s: float = 300.0
     max_invoice_quantity: int = 100
     invoices_per_ip_per_hour: int = 20
-    # The header the proxy in front of the API puts the visitor's IP in
-    # (Render, Vite and Cloudflare all set x-forwarded-for; first entry).
+    # The header holding the visitor's IP. Locally Vite and Cloudflare set
+    # x-forwarded-for (first entry); on Railway set x-real-ip, because Caddy
+    # rewrites x-forwarded-for with Railway's edge address.
     client_ip_header: str = "x-forwarded-for"
     # Salt for the stored IP hash: rate limiting without keeping raw IPs.
     ip_hash_salt: str = "thalace-shops"

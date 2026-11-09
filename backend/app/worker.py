@@ -2,7 +2,7 @@
 payment awaiting arrival, then plans, sends and settles fees and payouts.
 
 It runs inside the API process, which is why the API runs as exactly one
-always-on instance (render.yaml): two copies would race each other, and a
+always-on replica on Railway: two copies would race each other, and a
 sleeping one would miss payments."""
 
 import asyncio

@@ -32,7 +32,7 @@ bun run build                   # must pass before pushing
 bun run lint
 ```
 
-Deploy: `render.yaml` and `docs/deploy-render.md`.
+Deploy: Railway, `backend/railway.json` and `frontend/railway.json`; steps in `docs/deploy-railway.md`.
 
 ---
 

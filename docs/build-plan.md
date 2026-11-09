@@ -19,7 +19,7 @@ The goal: put a business online, onchain and in front of agents as well as peopl
 | 1 | Which project is submitted | **Only Thalace Shops.** The gtmx Thalace Store (`near-hackathon` branch, PRs #366–#372, built 2026-11-01 to 11-03) is ported in and disclosed. It is not submitted separately (Q-015). |
 | 2 | What shops sell | Digital goods and services, so delivery is a link or a Markdown deliverable. Made-to-order physical work (a print job) is sold as a **service the team delivers**: the invoice is paid onchain, and fulfilment is marked done by the shop. |
 | 3 | How agents reach shops | MCP endpoint + public directory; Agent Market listing as a second channel |
-| 4 | Demo domain | `shops.thalace.com`, hosted on **Render**, database on a **new Supabase project** (connected 2026-11-08) |
+| 4 | Demo domain | `shops.thalace.com`, hosted on **Railway** (moved from Render on 2026-11-09), database on a **new Supabase project** (connected 2026-11-08) |
 | 5 | Shop-to-shop trade | Yes: a shared directory, negotiation between agents, group bulk orders |
 | 6 | Demo business | **Shanga Prints** (https://prints.shangalabs.com), a real Nairobi digital-manufacturing business (§9) |
 | 7 | Platform fee | Thalace takes a fee on each sale, **set by the admin** (§6.2) |
@@ -204,7 +204,7 @@ The Agent API policy covers actions, assets, limits, **destinations**, a USD bud
 
 | Day | Date | Focus | Done when | Priority |
 |---|---|---|---|---|
-| 0 | Sun 11-08 | **Unblock.** Supabase connected ✅, Render chosen ✅. Agent API approval pending, so **build against the demo key** (partners.demo.agentsonintents.com, base URL `api.demo.agentsonintents.com`) and switch to the `naa_…` key when it's approved. `STORE_GRANT_KEY`. Deploy the skeleton to `shops.thalace.com` with HTTPS and Supabase Postgres. Read the docs on the items in §10. | `https://shops.thalace.com/api/v1/health` answers; Agent API `tokens()` works with the key | P0 |
+| 0 | Sun 11-08 | **Unblock.** Supabase connected ✅, hosting chosen ✅ (Railway since 2026-11-09). Agent API approval pending, so **build against the demo key** (partners.demo.agentsonintents.com, base URL `api.demo.agentsonintents.com`) and switch to the `naa_…` key when it's approved. `STORE_GRANT_KEY`. Deploy the skeleton to `shops.thalace.com` with HTTPS and Supabase Postgres. Read the docs on the items in §10. | `https://shops.thalace.com/api/v1/health` answers; Agent API `tokens()` works with the key | P0 |
 | 1 | Mon 11-09 | **Foundations.** ✅ Supabase sign-in (magic link + Google), Alembic, the first tables (shops, offers, payees, platform settings, admin audit log; invoices, ledger and owner signatures come with their features), Agent API client and tests ported, shops API, admin fee API, NEAR AI Cloud first in the LLM ladder (GLM-5.3, Qwen3.8-27B, DeepSeek V4.1 Flash), sign-in and shops screens. Dev ports: API 8100, app 5180. | A founder signs in, creates two shops, sees them listed; tests green | P0 |
 | 2 | Tue 11-10 | **Done early (Mon 11-09).** ✅ Shop page (offers, money rules, agent chat); shop agent (ReAct loop ported from gtmx, tools: shop_overview, list_offers, read_website via Firecrawl, draft_offer, update_draft_offer; checked live on Shanga's site); passkey go-live ported from the gtmx Store, one passkey per founder per site owning every shop's wallet, the fee account in every policy. Test go-live through a Cloudflare tunnel (FRONTEND_BASE_URL = the tunnel); tunnel shops are throwaway. | Owner chats with the shop agent, it drafts offers, the owner signs the shop live on `shops.thalace.com` | P0 |
 | 3 | Wed 11-11 | **Built early (Mon 11-09); real $1 test pending.** ✅ Invoices numbered per shop with the fee in force; a deposit address quoted only when the buyer picks a coin (real quotes checked: $1 is the minimum on USDC Base and NEAR, quotes last ~4 days); a watcher in the API reads payments (amount_out, tx hash), expiries and refunds; the fee then payees go out one at a time, ledger first; public shop page, invoice page with QR and live status, public ledger, owner invoices with delivery, ledger CSV. Email receipts not built (no sending domain). | A human pays $1 from another chain; the invoice reads paid → delivered → settled, with tx links | P0 |
@@ -309,7 +309,7 @@ Sources: Agent API [How it works](https://docs.agentsonintents.com/integration/a
 
 ## 12. Open questions
 
-Answered 2026-11-08: demo business (Shanga Prints), hosting (Render + new Supabase), platform fee (admin-set), group orders (seller enables, any buyer opens). See §2.
+Answered 2026-11-08: demo business (Shanga Prints), hosting (Railway + new Supabase), platform fee (admin-set), group orders (seller enables, any buyer opens). See §2.
 
 Also answered: Shanga belongs to the founder; the fee goes to `NEAR_MAINNET_PLATFORM_TREASURY_WALLET_ADDRESS`.
 
