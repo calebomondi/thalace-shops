@@ -124,6 +124,34 @@ class Settings(BaseSettings):
     # The highest daily cap an owner may sign: keeps a mistyped cap from
     # letting a shop move far more than a small business would.
     max_daily_budget_usd: int = 1000
+    # -- Invoices and payments --
+    # Dollar stablecoins a buyer may pay with (asset ids from GET /v1/tokens);
+    # each is credited to the shop as its settlement asset.
+    pay_assets: Annotated[list[str], NoDecode] = Field(default_factory=lambda: [
+        "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",  # USDC, NEAR
+        "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",  # USDC, Base
+        "nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near",  # USDC, Arbitrum
+        "nep141:sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near",  # USDC, Solana
+        "nep141:eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near",  # USDC, Ethereum
+        "nep141:usdt.tether-token.near",  # USDT, NEAR
+        "nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near",  # USDT, Tron
+    ])
+    # How long the Agent API's token list is reused before reading it again.
+    tokens_cache_s: float = 300.0
+    max_invoice_quantity: int = 100
+    invoices_per_ip_per_hour: int = 20
+    # The header the proxy in front of the API puts the visitor's IP in
+    # (Render, Vite and Cloudflare all set x-forwarded-for; first entry).
+    client_ip_header: str = "x-forwarded-for"
+    # Salt for the stored IP hash: rate limiting without keeping raw IPs.
+    ip_hash_salt: str = "thalace-shops"
+    # The background loop that watches payments and sends payouts.
+    watcher_enabled: bool = True
+    watcher_interval_s: float = 10.0
+    watcher_batch: int = 50
+    # An invoice page asks the Agent API itself when the watcher hasn't for this long.
+    invoice_recheck_s: float = 5.0
+
     # -- Shop agent --
     # Per owner turn: tool calls before the agent must answer, the
     # conversation re-sent each step, and the turn's wall clock.
@@ -174,7 +202,7 @@ class Settings(BaseSettings):
         return value
 
     @field_validator("allowed_origins", "admin_bootstrap_emails", "llm_models", "llm_cheap_models",
-                     "llm_fallback_models", "near_ai_models", mode="before")
+                     "llm_fallback_models", "near_ai_models", "pay_assets", mode="before")
     @classmethod
     def _parse_str_list(cls, value):
         """Accept a comma-separated string or a JSON array from the env."""

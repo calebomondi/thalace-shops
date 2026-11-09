@@ -47,6 +47,12 @@ def migrated_database():
 
 
 @pytest.fixture(autouse=True)
+def no_watcher(monkeypatch):
+    """Tests drive the payment watcher themselves, never on a timer."""
+    monkeypatch.setattr(settings, "watcher_enabled", False)
+
+
+@pytest.fixture(autouse=True)
 def clean_tables():
     yield
     tables = sql.SQL(", ").join(sql.Identifier(t.name) for t in Base.metadata.sorted_tables)

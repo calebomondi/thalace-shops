@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import worker
 from app.api.v1.routes import api_router
 from app.services.errors import (
     ConflictError,
@@ -39,7 +40,7 @@ def add_service_error_handlers(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=settings.project_name)
+    app = FastAPI(title=settings.project_name, lifespan=lambda _: worker.running())
     if settings.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True,
                            allow_methods=["*"], allow_headers=["*"])

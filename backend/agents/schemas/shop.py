@@ -41,3 +41,21 @@ ShopIntentType = Literal["agent_create", "grant_issue", "policy_update", "agent_
 SHOP_INTENT_TYPES: tuple[str, ...] = ShopIntentType.__args__
 ShopIntentStatus = Literal["awaiting_signature", "submitted", "succeeded", "failed", "expired"]
 SHOP_INTENT_STATUSES: tuple[str, ...] = ShopIntentStatus.__args__
+
+# open: issued, no payment address yet. awaiting_payment: an address is
+# quoted for the exact amount. paid: it arrived. delivered: the buyer has it.
+# expired: the quote ran out unpaid (pay again under the same number).
+# refunded: what arrived couldn't be credited as sent; it went back into the
+# shop's own wallet, never to the buyer. failed: no address could be made.
+InvoiceStatus = Literal["open", "awaiting_payment", "paid", "delivered", "expired", "refunded", "failed"]
+INVOICE_STATUSES: tuple[str, ...] = InvoiceStatus.__args__
+# Who an invoice is for: a person on the shop page, an outside agent, or another shop.
+BuyerKind = Literal["person", "agent", "shop"]
+BUYER_KINDS: tuple[str, ...] = BuyerKind.__args__
+
+# The public ledger. sale: a payment credited. fee: the platform's share,
+# sent to its account. payout: a payee's share. refund: money sent back.
+LedgerKind = Literal["sale", "fee", "payout", "refund"]
+LEDGER_KINDS: tuple[str, ...] = LedgerKind.__args__
+LedgerStatus = Literal["pending", "done", "failed"]
+LEDGER_STATUSES: tuple[str, ...] = LedgerStatus.__args__

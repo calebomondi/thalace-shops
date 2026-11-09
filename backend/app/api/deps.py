@@ -3,10 +3,11 @@
 Every route under a shop takes OwnedShop, which resolves the shop for its
 owner and is a 404 for anyone else, indistinguishable from a missing shop."""
 
+import hashlib
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,7 @@ from app.database.connect import get_db
 from app.database.models import Shop
 from app.services import shops as shop_service
 from app.supabase_auth import AuthUnavailableError, AuthUser, user_from_token
+from config import settings
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -52,3 +54,12 @@ async def require_admin(user: CurrentUser) -> AuthUser:
 
 
 AdminUser = Annotated[AuthUser, Depends(require_admin)]
+
+
+def client_ip_hash(request: Request) -> str | None:
+    """A salted hash of the caller's IP, for rate limits; the IP itself is never kept."""
+    forwarded = request.headers.get(settings.client_ip_header, "")
+    ip = forwarded.split(",")[0].strip() or (request.client.host if request.client else "")
+    if not ip:
+        return None
+    return hashlib.sha256(f"{settings.ip_hash_salt}:{ip}".encode()).hexdigest()
