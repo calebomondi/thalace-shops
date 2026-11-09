@@ -20,14 +20,14 @@ Dependency direction is **frontend → backend app → agents → data_sources /
 # Backend (from backend/)
 cp .env.example .env            # first time only, then fill in keys
 uv sync
-scripts/dev.sh                  # starts Docker Postgres (port 5433), then uvicorn --reload on :8000
+scripts/dev.sh                  # starts Docker Postgres (port 5433), then uvicorn --reload on :8100
 uv run pytest                   # tests
 uv run alembic upgrade head     # apply migrations
 uv run alembic revision --autogenerate -m "add_x_to_y"
 
 # Frontend (from frontend/). Bun only.
 bun install
-bun run dev                     # Vite on :5173, proxies /api to :8000
+bun run dev                     # Vite on :5180, proxies /api to :8100
 bun run build                   # must pass before pushing
 bun run lint
 ```

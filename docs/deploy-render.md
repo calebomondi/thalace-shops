@@ -41,7 +41,7 @@ During the hackathon both deploy from **`dev`** on every push. Switch `branch:` 
 
 ## 3. Supabase
 
-- **Authentication → URL Configuration**: Site URL `https://shops.thalace.com`; redirect URLs `https://shops.thalace.com/**` and `http://localhost:5173/**`.
+- **Authentication → URL Configuration**: Site URL `https://shops.thalace.com`; redirect URLs `https://shops.thalace.com/**` and `http://localhost:5180/**`.
 
 ## 4. Check it works
 

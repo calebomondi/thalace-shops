@@ -1,26 +1,25 @@
-import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes } from 'react-router'
 
-type Health = { status: string; project: string; environment: string }
+import { AppShell } from './components/app-shell'
+import { SignInPage } from './features/auth/sign-in-page'
+import { ShopsPage } from './features/shops/shops-page'
+import { useAuth } from './lib/auth-context'
 
 function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { session, loading } = useAuth()
 
-  useEffect(() => {
-    fetch('/api/v1/health')
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-      .then(setHealth)
-      .catch((err: Error) => setError(err.message))
-  }, [])
+  if (loading) {
+    return <p className="p-8 text-muted">Loading…</p>
+  }
 
   return (
-    <main>
-      <h1>Thalace Shops</h1>
-      <p>
-        Backend:{' '}
-        {health ? `${health.status} (${health.environment})` : error ? `unreachable: ${error}` : 'checking…'}
-      </p>
-    </main>
+    <Routes>
+      <Route path="/sign-in" element={session ? <Navigate to="/" replace /> : <SignInPage />} />
+      <Route element={session ? <AppShell /> : <Navigate to="/sign-in" replace />}>
+        <Route index element={<ShopsPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 

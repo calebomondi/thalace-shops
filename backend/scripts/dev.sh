@@ -18,7 +18,7 @@ uv run alembic upgrade head
 exec uv run uvicorn app.main:app \
   --reload \
   --host 0.0.0.0 \
-  --port 8000 \
+  --port 8100 \
   --reload-dir app \
   --reload-dir agents \
   --reload-dir utils \
